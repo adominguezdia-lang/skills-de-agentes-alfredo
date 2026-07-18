@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Entity",
+  "description": "Single entity extracted by Etapa 2 (extract_entities.py). One per line in entities.jsonl.",
+  "type": "object",
+  "required": ["entity", "type", "layer", "section"],
+  "properties": {
+    "entity": { "type": "string", "minLength": 2 },
+    "type": {
+      "type": "string",
+      "enum": ["INSTITUCION", "CARGO", "NORMA", "DOCUMENTO", "PERSONA", "LUGAR"]
+    },
+    "layer": {
+      "type": "string",
+      "enum": ["normativo", "operativo", "informal"]
+    },
+    "section": { "type": "string" },
+    "context": { "type": "string" }
+  }
+}

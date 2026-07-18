@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GraphMetrics",
+  "description": "Metrics produced by Etapa 3 (build_graph.py).",
+  "type": "object",
+  "required": ["schema_version", "nodos_totales", "aristas_totales", "densidad"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "corpus_size": { "type": "integer", "minimum": 1 },
+    "nodos_totales": { "type": "integer", "minimum": 0 },
+    "aristas_totales": { "type": "integer", "minimum": 0 },
+    "densidad": { "type": "number", "minimum": 0, "maximum": 1 },
+    "componentes_conexas": { "type": "integer", "minimum": 1 },
+    "comunidades": { "type": "integer", "minimum": 1 },
+    "comunidad_method": { "type": "string", "enum": ["louvain", "greedy_modularity"] },
+    "top_centralidad_grado": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["nodo", "valor"],
+        "properties": {
+          "nodo": { "type": "string" },
+          "label": { "type": "string" },
+          "valor": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+    "top_betweenness": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["nodo", "valor"],
+        "properties": {
+          "nodo": { "type": "string" },
+          "label": { "type": "string" },
+          "valor": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+    "densidad_por_capa": {
+      "type": "object",
+      "properties": {
+        "normativo": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "operativo": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "informal": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+      }
+    },
+    "actores_transversales": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "nodo": { "type": "string" },
+          "label": { "type": "string" },
+          "capas": { "type": "array", "items": { "type": "string" } },
+          "frecuencia": { "type": "integer" }
+        }
+      }
+    },
+    "advertencia_corpus_pequeno": { "type": ["string", "null"] }
+  }
+}

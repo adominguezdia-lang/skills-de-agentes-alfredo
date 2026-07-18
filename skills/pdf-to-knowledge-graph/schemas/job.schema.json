@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "JobMetadata",
+  "description": "Metadata produced by Etapa 1 (pdf_to_md.py).",
+  "type": "object",
+  "required": ["job_id", "filename", "method", "prompt_version", "created_at"],
+  "properties": {
+    "job_id": { "type": "string", "pattern": "^[a-f0-9]{12}$" },
+    "filename": { "type": "string" },
+    "method": { "type": "string", "enum": ["text", "ocr"] },
+    "prompt_version": { "type": "string", "enum": ["v1", "v2", "v3"] },
+    "layer": { "type": "string", "enum": ["normativo", "operativo", "informal", null] },
+    "user_id": { "type": "string" },
+    "n_pages": { "type": "integer", "minimum": 0 },
+    "n_blocks": { "type": "integer", "minimum": 0 },
+    "pdf_metadata": { "type": "object" },
+    "created_at": { "type": "string", "format": "date-time" }
+  }
+}

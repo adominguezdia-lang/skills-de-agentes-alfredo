@@ -7,6 +7,7 @@ Catálogo de skills personalizados para agentes IA, creados y mantenidos por Alf
 | Skill | Descripción | Categoría |
 |---|---|---|
 | [`biblio-metadata-extractor`](skills/biblio-metadata-extractor/) | Extrae metadatos bibliográficos (PDFs, páginas web, informes institucionales, libros, artículos académicos) a un JSON estricto de 12 claves. | `productivity` |
+| [`pdf-to-knowledge-graph`](skills/pdf-to-knowledge-graph/) | Pipeline de 3 etapas (PDF→MD→entidades→grafo) para análisis de gobernanza: extrae texto, identifica entidades por capa (normativo/operativo/informal), y construye un grafo NetworkX con métricas de red (densidad, comunidades, centralidad, actores transversales). | `productivity` |
 
 ## Estructura del repositorio
 
