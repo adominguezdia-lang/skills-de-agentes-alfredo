@@ -20,7 +20,7 @@ Uso:
 """
 from __future__ import annotations
 import argparse, json, pathlib, re, sys
-from collections import defaultdict
+from collections import defaultdict, Counter
 
 SCHEMA_VERSION = "1.0"
 
@@ -224,7 +224,6 @@ def main():
     p.add_argument("--meta", required=True)
     p.add_argument("--output", required=True)
     p.add_argument("--diccionario", default=None)
-    p.add_argument("--use-llm", action="store_true")
     p.add_argument("--validate", action="store_true")
     args = p.parse_args()
 
@@ -261,11 +260,6 @@ def main():
                 n_total += 1
 
     print(f"✓ {n_total} entidades extraídas → {entities_path}")
-
-    if args.use_llm:
-        print("⚠ --use-llm no implementado en esta versión base.")
-        print("  Las regex+diccionario capturan >85% de los casos típicos de gobernanza MX.")
-        print("  Para召回 adicional, complementar con revisión manual o modelo externo.")
 
     # Validación automática
     v = validate_entities(entities_path, md_path)

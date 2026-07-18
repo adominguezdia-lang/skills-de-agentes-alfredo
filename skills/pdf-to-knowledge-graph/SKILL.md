@@ -204,11 +204,14 @@ Las métricas guían la siguiente iteración. Si la cobertura es baja (< 0.85), 
 
 ## Prompts versionados
 
-Carpeta `prompts/`:
+La carpeta `prompts/` contiene **plantillas de prompt** documentadas (v1 base, v2 con tablas, v3 para OCR) que describen cómo un LLM debería convertir texto crudo a Markdown. Los archivos están ahí como **referencia conceptual** y para que el usuario los copie a su cliente LLM preferido.
 
-- `prompt_conversion_v1.md` — base, preserve content + headings + lists.
-- `prompt_conversion_v2.md` — añade manejo explícito de tablas GFM.
-- `prompt_conversion_v3.md` — para OCR; tolerante a ruido y errores de reconocimiento.
+El script `pdf_to_md.py` **no invoca un LLM directamente** — extrae texto y estructura con pymupdf. La conversión final a Markdown limpio se hace con heurísticas de heading/lista basadas en tamaño de fuente y patrones. Si el usuario quiere aplicar los prompts a un LLM externo, debe:
+
+1. Extraer el texto crudo con `pdf_to_md.py --input doc.pdf --output ./jobs/<id>/` (queda en `<id>.layout.json` y en el cuerpo del `<id>.md`).
+2. Pasar ese texto al LLM junto con la plantilla de prompt elegida.
+3. Sobrescribir el `<id>.md` con el resultado del LLM.
+4. Registrar la versión de prompt usada en `<id>.meta.json` → `prompt_version`.
 
 Cada job guarda qué versión usó en `<job_id>.meta.json` → `prompt_version`.
 

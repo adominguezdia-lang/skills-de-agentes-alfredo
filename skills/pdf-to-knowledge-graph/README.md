@@ -64,11 +64,14 @@ pdf-to-knowledge-graph/
 ## Dependencias
 
 ```bash
-pip install pymupdf pdfplumber networkx
-# tesseract binario (macOS): brew install tesseract tesseract-lang
+pip install pymupdf networkx
+# tesseract binario (macOS) — opcional, solo para PDFs escaneados:
+brew install tesseract tesseract-lang
 # pyvis opcional para visualización interactiva:
 pip install pyvis
 ```
+
+Ver `requirements.txt` para versiones mínimas probadas.
 
 ## Salidas
 

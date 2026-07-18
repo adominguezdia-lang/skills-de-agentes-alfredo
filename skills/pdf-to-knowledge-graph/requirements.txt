@@ -1,0 +1,9 @@
+# Dependencias de python probadas para pdf-to-knowledge-graph
+# Versiones mínimas verificadas. Versiones mayores suelen funcionar también.
+
+pymupdf>=1.24.0       # extracción de texto + estructura de PDFs
+networkx>=3.0         # grafos + métricas de red
+
+# Opcionales:
+# pyvis>=0.3.0         # visualización interactiva del grafo (si no, fallback HTML tabular)
+# tesseract (binario)  # OCR para PDFs escaneados — instalar vía brew/apt, no pip

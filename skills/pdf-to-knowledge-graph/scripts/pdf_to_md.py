@@ -28,11 +28,6 @@ try:
 except ImportError:
     sys.exit("pymupdf no instalado. Ejecuta: pip install pymupdf")
 
-try:
-    import pdfplumber
-except ImportError:
-    pdfplumber = None
-
 
 SCHEMA_VERSION = "1.0"
 PROMPT_VERSION = "v1"
