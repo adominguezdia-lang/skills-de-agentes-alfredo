@@ -174,6 +174,43 @@ references/<Tag>_<SourceType>.json
 
 Then deliver via `MEDIA:/absolute/path/to/file.json`. Otherwise, inline JSON is the response.
 
+## Provenance-aware input handling
+
+Different sources expose the same article through different surfaces. Use the right one:
+
+| Input shape                           | Where the metadata lives                                  | Reliability |
+|---------------------------------------|-----------------------------------------------------------|-------------|
+| Local PDF with text layer             | `pymupdf` first 2 pages + `doc.metadata`                  | High if text is selectable |
+| Local scanned PDF (no text layer)     | `marker-pdf` OCR (`marker-pdf file.pdf --output_dir ./`)  | High for typed scans |
+| Web URL returning `application/pdf`   | Download then treat as local PDF                          | Same as above |
+| OJS article page (HTML, no PDF link)  | `RIS` via `/citationstylelanguage/download/ris?...`      | **Highest — canonical** |
+| OJS article page (RIS not exposed)    | `<meta name="citation_*">` tags + `<meta name="DC.*">`    | High |
+| OJS article page (no metadata at all) | Visible rendered text near title block                    | Last resort |
+
+### OJS recipe (most common academic publisher in Mexico)
+
+OJS = Open Journal Systems, used by INACIPE, UNAM, SciELO, many Mexican journals.
+
+1. Try `https://<host>/index.php/<journal>/article/download/<id>/<galley>?inline=1` — if it returns `application/pdf`, save and extract with pymupdf.
+2. If it returns HTML (the common case), the page is still useful:
+   - Parse `<meta name="citation_title|author|publication_date|doi|volume|issue|firstpage|lastpage|journal_title">`.
+   - Also look for `<meta name="DC.*">` (Dublin Core fallback).
+3. For canonical metadata, hit the CSL endpoint:
+   ```
+   https://<host>/index.php/<journal>/citationstylelanguage/download/ris?submissionId=<id>&publicationId=<id>
+   ```
+   RIS is the cleanest structured source. Use it whenever present.
+4. BibTeX is an acceptable fallback at the same endpoint with `download/bibtex`.
+5. **Do not** attempt the OJS API (`/api/v1/submissions/<id>`) — it requires a token and returns 403 to anonymous clients.
+6. If the PDF link is not exposed at all, say so in `Notes` and proceed with the metadata. Do not invent a PDF URL.
+
+### DOI handling when present
+
+A `<meta name="citation_doi">` value like `10.57042/rmcp.v9i28.994` is metadata, not a URL. Per the rules in this skill:
+- Keep the DOI in `Notes` (e.g. `DOI: 10.xxxx/...`).
+- Do NOT paste it into `URL`.
+- Optional: if the user wants a clickable link, convert to `https://doi.org/<DOI>` and put it in `URL`, but only when the user confirms.
+
 ## Common pitfalls
 
 1. **Wrapping the response in markdown fences.** The contract is "raw JSON only". Code fences (` ```json ... ``` `) break parsers downstream. First byte `{`, last byte `}`.
