@@ -1,0 +1,16 @@
+{
+  "Tag": "Garcia2022PobDerechos",
+  "SourceType": "Book",
+  "AuthorType": "person",
+  "Authors": [
+    { "Last": "García Pérez", "First": "Juan" }
+  ],
+  "CorporateAuthor": { "Name": "" },
+  "Title": "Pobreza y derechos sociales",
+  "Year": "2022",
+  "City": "México",
+  "Publisher": "Editorial Tirant lo Blanch",
+  "Institution": "",
+  "URL": "",
+  "Notes": ""
+}

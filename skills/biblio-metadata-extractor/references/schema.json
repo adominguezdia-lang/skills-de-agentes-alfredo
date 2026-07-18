@@ -1,0 +1,104 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "BibliographicMetadata",
+  "description": "Canonical schema for the biblio-metadata-extractor skill output.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "Tag",
+    "SourceType",
+    "AuthorType",
+    "Authors",
+    "CorporateAuthor",
+    "Title",
+    "Year",
+    "City",
+    "Publisher",
+    "Institution",
+    "URL",
+    "Notes"
+  ],
+  "properties": {
+    "Tag": {
+      "type": "string",
+      "description": "Short identifier, ASCII, no spaces. Pattern: <AuthorOrOrg><Year><Keyword>.",
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "SourceType": {
+      "type": "string",
+      "enum": ["Book", "JournalArticle", "Report", "ElectronicSource", ""],
+      "description": "Type of document."
+    },
+    "AuthorType": {
+      "type": "string",
+      "enum": ["person", "corporate", ""],
+      "description": "Whether the author is a person or a corporate body."
+    },
+    "Authors": {
+      "type": "array",
+      "description": "Personal authors. Empty array when AuthorType is 'corporate'.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["Last", "First"],
+        "properties": {
+          "Last": { "type": "string" },
+          "First": { "type": "string" }
+        }
+      }
+    },
+    "CorporateAuthor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["Name"],
+      "properties": {
+        "Name": { "type": "string" }
+      }
+    },
+    "Title": { "type": "string" },
+    "Year": {
+      "type": "string",
+      "description": "Publication year, 4 digits. Empty string if unknown.",
+      "pattern": "^(\\d{4})?$"
+    },
+    "City": { "type": "string" },
+    "Publisher": { "type": "string" },
+    "Institution": { "type": "string" },
+    "URL": {
+      "type": "string",
+      "description": "Public, stable retrieval URL. Empty for internal/no-URL sources."
+    },
+    "Notes": {
+      "type": "string",
+      "description": "Free-text clarifications: inferences, ambiguities, missing data."
+    }
+  },
+  "allOf": [
+    {
+      "description": "When AuthorType is 'person', Authors must have at least one entry and CorporateAuthor.Name must be empty.",
+      "if": {
+        "properties": { "AuthorType": { "const": "person" } },
+        "required": ["AuthorType"]
+      },
+      "then": {
+        "properties": {
+          "Authors": { "minItems": 1 },
+          "CorporateAuthor": { "properties": { "Name": { "const": "" } } }
+        }
+      }
+    },
+    {
+      "description": "When AuthorType is 'corporate', Authors must be empty and CorporateAuthor.Name must be non-empty.",
+      "if": {
+        "properties": { "AuthorType": { "const": "corporate" } },
+        "required": ["AuthorType"]
+      },
+      "then": {
+        "properties": {
+          "Authors": { "maxItems": 0 },
+          "CorporateAuthor": { "required": ["Name"], "properties": { "Name": { "minLength": 1 } } }
+        }
+      }
+    }
+  ]
+}
