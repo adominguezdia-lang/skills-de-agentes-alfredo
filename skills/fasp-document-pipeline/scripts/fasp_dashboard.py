@@ -1,38 +1,69 @@
 #!/usr/bin/env python3
 """
-fasp_dashboard.py — Dashboard HTML con tabs para el pipeline FASP.
+fasp_dashboard.py — Dashboard HTML de seguimiento del pipeline FASP.
 
-Genera un HTML autocontenido (sin servidor, sin frameworks externos) con
-4 pestañas: Resumen, Etapa 1, Etapa 2, Etapa 3. Cada tab muestra:
-  - Métricas globales en el tab Resumen
-  - Los 5 gates de cada etapa en su tab correspondiente
-  - Tabla de entidades federativas + timeline en cada tab
-
-Uso:
-    python3 fasp_dashboard.py --db ./fasp.db --output ./dashboard.html
+4 tabs: Resumen, Etapa 1, Etapa 2, Etapa 3.
+El tab Resumen muestra la lista de normas/conversiones con sus parametros
+y metricas de calidad (reemplaza la antigua vista de gates).
 """
 from __future__ import annotations
-import argparse, pathlib, sqlite3
+import argparse, json, pathlib, re, sys, unicodedata
+from collections import Counter
 from datetime import datetime
+from difflib import SequenceMatcher
+
+try:
+    import sqlite3
+except ImportError:
+    sys.exit("sqlite3 no disponible")
+
+try:
+    import fitz  # pymupdf
+except ImportError:
+    fitz = None  # El dashboard funciona sin PDF si no hay pymupdf
 
 
-PIPELINE_GATES = [
-    ("etapa_1_documental", "coordinadora", "Revision general de la Ficha tecnica FASP y coherencia global"),
-    ("etapa_1_documental", "analista_senior_juridico", "Revision de la matriz de congruencia y directorio preliminar"),
-    ("etapa_1_documental", "coordinacion_evaluacion", "Validacion de los 8 Informes 1 antes de entrega al SESNSP"),
-    ("etapa_1_documental", "coordinadora", "Validacion de la Ficha tecnica administrativa (Anexo 11)"),
-    ("etapa_1_documental", "analista_senior_juridico", "Validacion del Catalogo de unidades administrativas"),
-    ("etapa_2_campo_ars", "coordinadora", "Validacion del Producto 2 (Hallazgos de Campo + Grupos de Enfoque)"),
-    ("etapa_2_campo_ars", "analista_senior_redes", "Validacion de edge list, matrices y metricas ARS"),
-    ("etapa_2_campo_ars", "analistas_junior_grafos", "Verificacion de nodos, aristas y clasificacion de relaciones"),
-    ("etapa_2_campo_ars", "analista_senior_redes", "Validacion de la memoria algoritmica (Anexo 5)"),
-    ("etapa_2_campo_ars", "analistas_junior_grafos", "Validacion del Diccionario de atributos (Anexo 6)"),
-    ("etapa_3_triangulacion", "coordinadora", "Validacion de triangulaciones y ajustes de recomendaciones"),
-    ("etapa_3_triangulacion", "coordinacion_evaluacion", "Validacion del Informe Final y Estrategia de Consolidacion"),
-    ("etapa_3_triangulacion", "coordinacion_evaluacion", "Validacion de las fichas del Anexo 10"),
-    ("etapa_3_triangulacion", "coordinadora", "Validacion del Glosario especializado (Anexo 7)"),
-    ("etapa_3_triangulacion", "coordinacion_evaluacion", "Validacion de la Metodologia de replicabilidad (Anexo 8)"),
-]
+def text_similarity(a: str, b: str) -> float:
+    if not a or not b:
+        return 0.0
+    return SequenceMatcher(None, a[:5000], b[:5000]).ratio()
+
+
+def find_pdf(filename: str) -> pathlib.Path | None:
+    if not filename:
+        return None
+    home = pathlib.Path.home()
+    bases = [
+        pathlib.Path.cwd(),
+        home / "Downloads",
+        home / "Documents",
+        home / "Desktop",
+        pathlib.Path("/Users/adominguezdia/Downloads"),
+        pathlib.Path("/tmp"),
+    ]
+    for base in bases:
+        if not base.exists():
+            continue
+        cand = base / filename
+        if cand.exists() and cand.suffix.lower() == ".pdf":
+            return cand
+        try:
+            for pdf in base.rglob(filename):
+                if pdf.suffix.lower() == ".pdf":
+                    return pdf
+        except (PermissionError, OSError):
+            continue
+    return None
+
+
+def extract_pdf_text(pdf_path: pathlib.Path) -> str:
+    if not fitz:
+        return ""
+    doc = fitz.open(pdf_path)
+    parts = [p.get_text() for p in doc]
+    doc.close()
+    return "\n\n".join(parts)
+
 
 ENTIDADES_FEDERATIVAS = [
     ("MEX", "Estado de Mexico"),
@@ -46,26 +77,12 @@ ENTIDADES_FEDERATIVAS = [
     ("NAL", "Agregacion Nacional"),
 ]
 
-PERFILES_LABEL = {
-    "coordinadora": "Coordinadora",
-    "analista_senior_juridico": "Analista Senior Juridico",
-    "analista_senior_redes": "Analista Senior Redes",
-    "analistas_junior_grafos": "Analistas Junior Grafos",
-    "coordinacion_evaluacion": "Coordinacion de Evaluacion",
-}
-
 ETAPAS_TABS = [
     ("resumen", "Resumen"),
     ("etapa_1", "Etapa 1: Documental"),
     ("etapa_2", "Etapa 2: Campo + ARS"),
     ("etapa_3", "Etapa 3: Triangulacion"),
 ]
-
-ETAPA_KEY_BY_TAB = {
-    "etapa_1": "etapa_1_documental",
-    "etapa_2": "etapa_2_campo_ars",
-    "etapa_3": "etapa_3_triangulacion",
-}
 
 
 def query_db(db_path: pathlib.Path) -> dict:
@@ -79,114 +96,279 @@ def query_db(db_path: pathlib.Path) -> dict:
         for r in conn.execute("SELECT key, value FROM _meta"):
             meta[r["key"]] = r["value"]
 
-        data = {
-            "existe": True,
-            "meta": meta,
-            "metricas": {
-                "documentos": conn.execute("SELECT COUNT(*) FROM documentos").fetchone()[0],
-                "normas": conn.execute("SELECT COUNT(*) FROM normas").fetchone()[0],
-                "unidades": conn.execute("SELECT COUNT(*) FROM norma_unidades").fetchone()[0],
-                "actores": conn.execute("SELECT COUNT(*) FROM actores").fetchone()[0],
-                "aristas": conn.execute("SELECT COUNT(*) FROM aristas").fetchone()[0],
-                "checkpoints_aprobados": conn.execute("SELECT COUNT(*) FROM checkpoints WHERE decision='aprobado'").fetchone()[0],
-                "checkpoints_pendientes": conn.execute("SELECT COUNT(*) FROM checkpoints WHERE decision='pendiente'").fetchone()[0],
-                "checkpoints_rechazados": conn.execute("SELECT COUNT(*) FROM checkpoints WHERE decision='rechazado'").fetchone()[0],
-                "fichas": conn.execute("SELECT COUNT(*) FROM fichas").fetchone()[0],
-            },
-            "gates": {},  # (etapa, perfil) -> {estado, fecha, aprobador}
-            "audit": [],
-            "metricas_por_etapa": {},
+        # Normas/conversiones
+        normas = []
+        for r in conn.execute("""
+            SELECT id_norma, id_documento, nombre_norma, nivel, jerarquia, fuente
+            FROM normas ORDER BY id_norma
+        """):
+            normas.append(dict(r))
+
+        metricas = {
+            "documentos": conn.execute("SELECT COUNT(*) FROM documentos").fetchone()[0],
+            "normas": conn.execute("SELECT COUNT(*) FROM normas").fetchone()[0],
+            "unidades": conn.execute("SELECT COUNT(*) FROM norma_unidades").fetchone()[0],
+            "actores": conn.execute("SELECT COUNT(*) FROM actores").fetchone()[0],
+            "aristas": conn.execute("SELECT COUNT(*) FROM aristas").fetchone()[0],
+            "fichas": conn.execute("SELECT COUNT(*) FROM fichas").fetchone()[0],
         }
 
-        # Cargar último estado de cada gate conocido.
-        for etapa, perfil, _ in PIPELINE_GATES:
-            row = conn.execute("""
-                SELECT decision, aprobador, fecha
-                FROM checkpoints
-                WHERE etapa = ? AND perfil = ?
-                ORDER BY id DESC LIMIT 1
-            """, (etapa, perfil)).fetchone()
-            key = (etapa, perfil)
-            if row:
-                data["gates"][key] = dict(row)
-            else:
-                data["gates"][key] = None
-
-        # Audit
+        # Audit log
+        audit = []
         for r in conn.execute("""
             SELECT timestamp, modulo, accion, tabla, detalle
-            FROM audit_log
-            ORDER BY id DESC LIMIT 20
+            FROM audit_log ORDER BY id DESC LIMIT 20
         """):
-            data["audit"].append(dict(r))
+            audit.append(dict(r))
 
-        # Métricas por etapa (las que podemos calcular rápido)
-        data["metricas_por_etapa"] = {
-            "etapa_1": {
-                "normas": data["metricas"]["normas"],
-                "unidades": data["metricas"]["unidades"],
-                "actores": data["metricas"]["actores"],
-            },
-            "etapa_2": {
-                "aristas": data["metricas"]["aristas"],
-            },
-            "etapa_3": {
-                "fichas": data["metricas"]["fichas"],
-            },
+        return {
+            "existe": True,
+            "meta": meta,
+            "metricas": metricas,
+            "normas": normas,
+            "audit": audit,
         }
-
     finally:
         conn.close()
-    return data
 
 
-def render_gate(gate_state):
-    """Renderiza un gate individual con su chip de estado."""
-    if gate_state is None:
-        chip = "pendiente"
-        label = "PENDIENTE"
-        fecha = ""
-        aprobador = ""
-    else:
-        chip = gate_state["decision"]
-        label = gate_state["decision"].upper()
-        fecha = gate_state.get("fecha", "")[:10] if gate_state.get("fecha") else ""
-        aprobador = gate_state.get("aprobador", "") or ""
-    return f'<div class="gate"><span class="chip {chip}">{label}</span><div class="gate-meta">{fecha} · {aprobador}</div></div>'
+def analyze_norma_conversion(norma: dict, db_path: pathlib.Path) -> dict:
+    """Calcula las metricas de calidad para una norma si el MD existe."""
+    # Buscar el MD asociado por nombre de la norma o por id_documento
+    home = pathlib.Path.home()
+    bases = [
+        db_path.parent / "jobs",
+        home / "Downloads",
+        home / "Downloads" / "fasp-jobs",
+        pathlib.Path("/tmp"),
+    ]
+    md_text = ""
+    md_path = None
+    meta_info = {}
+    # Construir identificadores candidatos para el job
+    candidates_id = []
+    for key in ("id_documento", "id_norma"):
+        v = norma.get(key)
+        if v:
+            candidates_id.append(v)
+    fuente = norma.get("fuente", "")
+    if fuente:
+        if fuente.endswith(".md"):
+            candidates_id.append(fuente[:-3])
+        else:
+            candidates_id.append(fuente)
+
+    # Busqueda recursiva limitada a 3 niveles
+    for base in bases:
+        if not base.exists():
+            continue
+        try:
+            for jd in base.glob("*/jobs/*") if base.name != "jobs" else base.glob("*/"):
+                if not jd.is_dir():
+                    continue
+                if jd.name in candidates_id:
+                    md_path = next(iter(jd.glob("FASP_2026_*.md")), None) or next(iter(jd.glob("*.md")), None)
+                    meta_path = next(iter(jd.glob("*.meta.json")), None)
+                    if md_path and meta_path:
+                        md_text = md_path.read_text(encoding="utf-8")
+                        meta_info = json.loads(meta_path.read_text(encoding="utf-8"))
+                        break
+        except (PermissionError, OSError):
+            continue
+        if md_text:
+            break
+
+    # Fallback: busqueda recursiva completa (más exhaustiva)
+    if not md_text:
+        for base in bases:
+            if not base.exists():
+                continue
+            try:
+                for md_path in base.rglob("*.md"):
+                    if md_path.parent.name in candidates_id:
+                        meta_path = md_path.parent / "*.meta.json"
+                        meta_files = list(md_path.parent.glob("*.meta.json"))
+                        if meta_files:
+                            md_text = md_path.read_text(encoding="utf-8")
+                            meta_info = json.loads(meta_files[0].read_text(encoding="utf-8"))
+                            break
+            except (PermissionError, OSError):
+                continue
+            if md_text:
+                break
+
+    if not md_text:
+        return {
+            "id_norma": norma.get("id_norma"),
+            "nombre": norma.get("nombre_norma"),
+            "nivel": norma.get("nivel"),
+            "jerarquia": norma.get("jerarquia"),
+            "fuente": norma.get("fuente"),
+            "score": None,
+            "rating": "Sin MD",
+            "available": False,
+        }
+    pdf = find_pdf(meta_info.get("filename", ""))
+    pdf_text = extract_pdf_text(pdf) if pdf else ""
+    coverage = 0
+    similarity = 0
+    keyword_pres = 0
+    missing_keywords = []
+
+    if pdf_text:
+        similarity = text_similarity(pdf_text, md_text)
+        long_caps = re.findall(r"\b[A-ZÁÉÍÓÚÑ]{5,}\b", pdf_text)
+        top = [w for w, _ in Counter(long_caps).most_common(20)]
+        preserved = [w for w in top if w in md_text]
+        missing_keywords = [w for w in top if w not in md_text]
+        keyword_pres = round(len(preserved) / len(top), 3) if top else 0
+
+    # Leer validation
+    issues_count = 0
+    val_path = md_path.with_suffix(".validation.json")
+    if md_path.name.startswith("FASP_2026_"):
+        # nomenclatura FASP: <basename>.validation.json
+        val_path = md_path.parent / (md_path.stem + ".validation.json")
+    if val_path.exists():
+        v = json.loads(val_path.read_text(encoding="utf-8"))
+        coverage = v.get("coverage", 0)
+        issues_count = len(v.get("issues", []))
+
+    score = (
+        coverage * 40 +
+        keyword_pres * 30 +
+        similarity * 20 +
+        max(0, 10 - issues_count * 2)
+    )
+    return {
+        "id_norma": norma.get("id_norma"),
+        "nombre": norma.get("nombre_norma"),
+        "nivel": norma.get("nivel"),
+        "jerarquia": norma.get("jerarquia"),
+        "fuente": norma.get("fuente"),
+        "filename": meta_info.get("filename"),
+        "method": meta_info.get("method"),
+        "prompt_version": meta_info.get("prompt_version"),
+        "layer": meta_info.get("layer"),
+        "n_pages": meta_info.get("n_pages"),
+        "n_blocks": meta_info.get("n_blocks"),
+        "created_at": meta_info.get("created_at"),
+        "metrics": {
+            "coverage": coverage,
+            "text_similarity": round(similarity, 3),
+            "keyword_preservation": keyword_pres,
+            "issues_count": issues_count,
+            "missing_keywords": missing_keywords[:5],
+        },
+        "score": round(score, 2),
+        "rating": "EXCELENTE" if score >= 85 else "BUENO" if score >= 70 else "ACEPTABLE" if score >= 50 else "BAJA",
+        "available": True,
+    }
 
 
-def render_gates_list(gates_list, data):
-    """Renderiza la lista de gates con su descripción y estado."""
-    html = []
-    for etapa, perfil, descripcion in gates_list:
-        key = (etapa, perfil)
-        state = data["gates"].get(key)
-        chip_class = "pendiente"
-        label = "PENDIENTE"
-        fecha = "—"
-        aprobador = "—"
+def render_norms_table(normas: list, db_path: pathlib.Path) -> str:
+    if not normas:
+        return '<div class="empty">Sin normas ingestadas.</div>'
+    rows = []
+    for n in normas:
+        a = analyze_norma_conversion(n, db_path)
+        if not a.get("available"):
+            score_cell = '<span class="badge gray">Sin MD</span>'
+            rating_cell = "—"
+            color = ""
+        else:
+            m = a["metrics"]
+            color = "#10b981" if a["score"] >= 85 else "#f59e0b" if a["score"] >= 50 else "#ef4444"
+            score_cell = f'<strong style="color:{color}">{a["score"]:.1f}</strong>'
+            rating_cell = a["rating"]
 
-        if state:
-            chip_class = state["decision"]
-            label = state["decision"].upper()
-            fecha = (state.get("fecha") or "")[:10] or "—"
-            aprobador = state.get("aprobador") or "—"
+        rows.append(f"""<tr>
+            <td><code>{a.get("id_norma", "-")[:14]}</code></td>
+            <td>{(a.get("nombre") or "-")[:40]}</td>
+            <td>{a.get("nivel", "-")}</td>
+            <td>{a.get("jerarquia", "-")}</td>
+            <td>{a.get("filename", "-")}</td>
+            <td>{a.get("prompt_version", "-")}</td>
+            <td>{a.get("n_pages", "-")}</td>
+            <td>{a.get("metrics", {}).get("coverage", "—")}</td>
+            <td>{a.get("metrics", {}).get("text_similarity", "—")}</td>
+            <td>{score_cell}</td>
+            <td>{rating_cell}</td>
+        </tr>""")
+    return "\n".join(rows)
 
-        html.append(f"""<div class="gate-card">
-            <div class="gate-card-left">
-                <span class="chip {chip_class}">{label}</span>
-                <span class="gate-card-perfil">{PERFILES_LABEL[perfil]}</span>
+
+def render_norms_detail(normas: list, db_path: pathlib.Path) -> str:
+    """Renderiza un panel expandible con detalles por norma."""
+    cards = []
+    for n in normas:
+        a = analyze_norma_conversion(n, db_path)
+        if not a.get("available"):
+            continue
+        m = a["metrics"]
+        color = "#10b981" if a["score"] >= 85 else "#f59e0b" if a["score"] >= 50 else "#ef4444"
+        missing = ", ".join(m.get("missing_keywords", [])) or "ninguna"
+
+        cards.append(f"""<div class="norma-card">
+            <div class="norma-card-header">
+                <div>
+                    <div class="norma-id">{a["id_norma"]}</div>
+                    <div class="norma-nombre">{a["nombre"][:60]}</div>
+                </div>
+                <div class="norma-score" style="background:{color}">
+                    {a["score"]:.1f}<br><span class="norma-rating">{a["rating"]}</span>
+                </div>
             </div>
-            <div class="gate-card-desc">{descripcion}</div>
-            <div class="gate-card-right">
-                <div class="gate-card-fecha">{fecha}</div>
-                <div class="gate-card-aprobador">{aprobador}</div>
+            <div class="norma-params">
+                <div><b>Layer:</b> {a.get("layer", "-")}</div>
+                <div><b>Method:</b> {a.get("method", "-")}</div>
+                <div><b>Prompt:</b> {a.get("prompt_version", "-")}</div>
+                <div><b>Paginas:</b> {a.get("n_pages", "-")}</div>
+                <div><b>Bloques:</b> {a.get("n_blocks", "-")}</div>
+                <div><b>Fecha:</b> {(a.get("created_at") or "-")[:10]}</div>
+            </div>
+            <div class="norma-metrics">
+                <div class="metric-pill">
+                    <span>Cobertura</span>
+                    <strong>{m.get("coverage", 0):.3f}</strong>
+                </div>
+                <div class="metric-pill">
+                    <span>Similitud texto</span>
+                    <strong>{m.get("text_similarity", 0):.3f}</strong>
+                </div>
+                <div class="metric-pill">
+                    <span>Preservacion keywords</span>
+                    <strong>{m.get("keyword_preservation", 0):.3f}</strong>
+                </div>
+                <div class="metric-pill">
+                    <span>Issues</span>
+                    <strong>{m.get("issues_count", 0)}</strong>
+                </div>
+            </div>
+            <div class="norma-missing">
+                <b>Keywords faltantes:</b> {missing}
             </div>
         </div>""")
-    return "\n".join(html)
+    if not cards:
+        return '<div class="empty">No hay normas con MD asociado para inspeccionar.</div>'
+    return "\n".join(cards)
 
 
-def render_entidades_tabla(m):
+def render_audit(audit: list) -> str:
+    if not audit:
+        return '<div class="empty">Sin eventos.</div>'
+    entries = []
+    for e in audit:
+        detalle = (e["detalle"] or "")[:80]
+        entries.append(f"""<div class="timeline-entry">
+            <div class="time">{e["timestamp"]}</div>
+            <span class="mod">{e["modulo"]}</span> · {e["accion"]} en {e["tabla"]}
+            {f'<div class="detalle">{detalle}</div>' if detalle else ""}
+        </div>""")
+    return "\n".join(entries)
+
+
+def render_entidades_table(m) -> str:
     rows = []
     for edo, nombre in ENTIDADES_FEDERATIVAS:
         docs_edo = m["documentos"] if edo == "NAL" else 0
@@ -198,20 +380,6 @@ def render_entidades_tabla(m):
             <td>{docs_edo} docs</td>
         </tr>""")
     return "\n".join(rows)
-
-
-def render_timeline(audit):
-    if not audit:
-        return '<div class="empty">Sin eventos registrados aun.</div>'
-    entries = []
-    for e in audit:
-        detalle = (e["detalle"] or "")[:100]
-        entries.append(f"""<div class="timeline-entry">
-            <div class="time">{e["timestamp"]}</div>
-            <span class="mod">{e["modulo"]}</span> · {e["accion"]} en {e["tabla"]}
-            {f'<div class="detalle">{detalle}</div>' if detalle else ""}
-        </div>""")
-    return "\n".join(entries)
 
 
 def render_html(data: dict, db_path: pathlib.Path) -> str:
@@ -227,24 +395,7 @@ h1{{color:#a00}}</style></head>
 
     m = data["metricas"]
     meta = data.get("meta", {})
-
-    # Calcular avance por etapa
-    def pct_etapa(tab_key):
-        etapa_key = ETAPA_KEY_BY_TAB[tab_key]
-        gates_etapa = [(e, p, d) for e, p, d in PIPELINE_GATES if e == etapa_key]
-        ok = sum(1 for e, p, _ in gates_etapa if data["gates"].get((e, p)) and data["gates"][(e, p)]["decision"] == "aprobado")
-        return ok, len(gates_etapa)
-    _ = pct_etapa  # evitar warning de no usado
-
-    # Gates por etapa para los tabs
-    gates_por_etapa = {
-        "etapa_1_documental": [(e, p, d) for e, p, d in PIPELINE_GATES if e == "etapa_1_documental"],
-        "etapa_2_campo_ars": [(e, p, d) for e, p, d in PIPELINE_GATES if e == "etapa_2_campo_ars"],
-        "etapa_3_triangulacion": [(e, p, d) for e, p, d in PIPELINE_GATES if e == "etapa_3_triangulacion"],
-    }
-
-    avance_total = sum(1 for k, v in data["gates"].items()
-                       if v and v["decision"] == "aprobado")
+    normas = data.get("normas", [])
 
     css = """
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -255,16 +406,8 @@ h1{{color:#a00}}</style></head>
               color: white; padding: 32px; border-radius: 12px; margin-bottom: 16px;
               box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
     .header h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
-    .header .subtitle { opacity: 0.9; font-size: 14px; margin-bottom: 16px; }
-    .header .meta { display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; }
-    .header .meta span { opacity: 0.9; }
-    .progress-global { margin-top: 16px; }
-    .progress-global .label { font-size: 13px; opacity: 0.9; margin-bottom: 6px; }
-    .progress-global .bar { height: 12px; background: rgba(255,255,255,0.2);
-                            border-radius: 6px; overflow: hidden; }
-    .progress-global .fill { height: 100%; background: #10b981; border-radius: 6px;
-                              transition: width 0.4s; }
-    /* Tabs */
+    .header .subtitle { opacity: 0.9; font-size: 14px; }
+    .header .meta { display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; margin-top: 12px; }
     .tabs { display: flex; gap: 0; border-bottom: 2px solid #e5e7eb; margin-bottom: 24px;
             background: white; border-radius: 10px 10px 0 0; padding: 0 8px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
@@ -276,7 +419,6 @@ h1{{color:#a00}}</style></head>
     .tab-content { display: none; }
     .tab-content.active { display: block; animation: fadeIn 0.3s; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-    /* Cards */
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 16px; margin-bottom: 24px; }
     .card { background: white; border-radius: 10px; padding: 20px;
@@ -284,37 +426,40 @@ h1{{color:#a00}}</style></head>
     .card .label { font-size: 11px; color: #6b7280; text-transform: uppercase;
                    letter-spacing: 0.05em; font-weight: 600; margin-bottom: 8px; }
     .card .value { font-size: 32px; font-weight: 700; color: #111827; line-height: 1; }
-    /* Tabla */
     .section { background: white; border-radius: 0 0 10px 10px; padding: 24px;
                box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 16px; }
     .section h2 { font-size: 18px; color: #111827; margin-bottom: 16px; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; }
-    th { background: #f9fafb; font-weight: 600; color: #374151; font-size: 12px; }
+    th { background: #f9fafb; font-weight: 600; color: #374151; font-size: 11px;
+         text-transform: uppercase; letter-spacing: 0.04em; }
     tr:hover { background: #f9fafb; }
-    /* Gate card */
-    .gate-card { display: grid; grid-template-columns: 280px 1fr 200px; gap: 16px;
-                 padding: 14px 16px; margin-bottom: 8px; background: #f9fafb;
-                 border-radius: 8px; align-items: center; }
-    .gate-card:hover { background: #f3f4f6; }
-    .gate-card-left { display: flex; align-items: center; gap: 10px; }
-    .gate-card-perfil { font-weight: 600; font-size: 13px; color: #1f2937; }
-    .gate-card-desc { font-size: 13px; color: #4b5563; }
-    .gate-card-right { text-align: right; font-size: 11px; color: #9ca3af; }
-    .gate-card-fecha { font-weight: 600; color: #4b5563; }
-    .gate-card-aprobador { color: #6b7280; }
-    /* Chips */
-    .chip { display: inline-block; padding: 3px 10px; border-radius: 12px;
-            font-size: 10px; font-weight: 700; text-transform: uppercase;
-            letter-spacing: 0.05em; white-space: nowrap; }
-    .chip.aprobado { background: #d1fae5; color: #065f46; }
-    .chip.pendiente { background: #fef3c7; color: #92400e; }
-    .chip.rechazado { background: #fee2e2; color: #991b1b; }
-    /* Badges */
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px;
-             font-size: 11px; font-weight: 600; }
-    .badge.green { background: #d1fae5; color: #065f46; }
-    .badge.gray { background: #f3f4f6; color: #6b7280; }
+    /* Norma cards */
+    .norma-card { background: white; border-radius: 10px; padding: 20px;
+                  margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+                  border-left: 4px solid #1a4480; }
+    .norma-card-header { display: flex; justify-content: space-between;
+                          align-items: flex-start; margin-bottom: 12px; }
+    .norma-id { font-family: monospace; font-size: 12px; color: #6b7280; }
+    .norma-nombre { font-size: 15px; font-weight: 600; color: #111827;
+                     margin-top: 2px; }
+    .norma-score { color: white; padding: 12px 18px; border-radius: 8px;
+                    text-align: center; font-size: 24px; font-weight: 700;
+                    line-height: 1.1; min-width: 90px; }
+    .norma-rating { font-size: 9px; font-weight: 600; text-transform: uppercase;
+                     letter-spacing: 0.05em; opacity: 0.95; }
+    .norma-params { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                     gap: 8px 16px; font-size: 12px; color: #4b5563; margin-bottom: 12px;
+                     padding: 12px; background: #f9fafb; border-radius: 6px; }
+    .norma-metrics { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .metric-pill { display: flex; flex-direction: column; align-items: center;
+                    padding: 8px 12px; background: #f3f4f6; border-radius: 6px;
+                    min-width: 80px; }
+    .metric-pill span { font-size: 10px; color: #6b7280; text-transform: uppercase;
+                        letter-spacing: 0.04em; }
+    .metric-pill strong { font-size: 16px; color: #111827; margin-top: 2px; }
+    .norma-missing { font-size: 12px; color: #4b5563;
+                      padding: 8px 12px; background: #fef3c7; border-radius: 6px; }
     /* Timeline */
     .timeline-entry { padding: 10px 12px; border-left: 3px solid #e5e7eb;
                        margin-bottom: 6px; background: #f9fafb;
@@ -325,105 +470,12 @@ h1{{color:#a00}}</style></head>
     .empty { color: #9ca3af; font-style: italic; padding: 12px; text-align: center;
              background: #f9fafb; border-radius: 6px; }
     .footer { text-align: center; padding: 24px; color: #9ca3af; font-size: 12px; }
-    /* Etiqueta de etapa */
-    .etapa-tag { display: inline-block; padding: 4px 12px; border-radius: 6px;
-                 background: #dbeafe; color: #1e40af; font-size: 12px;
-                 font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
-    .etapa-tag.e1 { background: #dbeafe; color: #1e40af; }
-    .etapa-tag.e2 { background: #ede9fe; color: #5b21b6; }
-    .etapa-tag.e3 { background: #fef3c7; color: #92400e; }
-    .etapa-progress { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-    .etapa-progress .bar { flex: 1; height: 10px; background: #e5e7eb;
-                            border-radius: 5px; overflow: hidden; }
-    .etapa-progress .fill { height: 100%; transition: width 0.3s; }
-    .etapa-progress .fill.green { background: #10b981; }
-    .etapa-progress .fill.yellow { background: #f59e0b; }
-    .etapa-progress .fill.red { background: #ef4444; }
-    .etapa-progress .pct { font-weight: 700; font-size: 14px; min-width: 40px; text-align: right; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px;
+             font-size: 11px; font-weight: 600; }
+    .badge.green { background: #d1fae5; color: #065f46; }
+    .badge.gray { background: #f3f4f6; color: #6b7280; }
+    code { background: #f3f4f6; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
     """
-
-    # Stats por etapa para mostrar
-    def stats_etapa(tab):
-        if tab == "etapa_1":
-            return [
-                ("Normas procesadas", m['normas']),
-                ("Unidades normativas", m['unidades']),
-                ("Actores en directorio", m['actores']),
-            ]
-        elif tab == "etapa_2":
-            return [
-                ("Aristas ARS", m['aristas']),
-                ("Gates Etapa 2 registrados",
-                 sum(1 for e, p in data["gates"] if e == "etapa_2_campo_ars"
-                     and data["gates"][(e, p)] and data["gates"][(e, p)]["decision"] == "aprobado")),
-            ]
-        elif tab == "etapa_3":
-            return [
-                ("Fichas de hallazgos (Anexo 10)", m['fichas']),
-                ("Gates Etapa 3 registrados",
-                 sum(1 for e, p in data["gates"] if e == "etapa_3_triangulacion"
-                     and data["gates"][(e, p)] and data["gates"][(e, p)]["decision"] == "aprobado")),
-            ]
-        return []
-
-    # Generar contenido de cada tab
-    def tab_content_resumen():
-        ok = sum(1 for k, v in data["gates"].items() if v and v["decision"] == "aprobado")
-        total = len(data["gates"])
-        return f"""
-        <div id="tab-resumen" class="tab-content active">
-            <div class="grid">
-                <div class="card"><div class="label">Normas procesadas</div><div class="value">{m['normas']}</div></div>
-                <div class="card"><div class="label">Unidades normativas</div><div class="value">{m['unidades']}</div></div>
-                <div class="card"><div class="label">Actores en directorio</div><div class="value">{m['actores']}</div></div>
-                <div class="card"><div class="label">Aristas ARS</div><div class="value">{m['aristas']}</div></div>
-                <div class="card"><div class="label">Gates registrados</div>
-                    <div class="value" style="color:#10b981">{ok}/{total}</div></div>
-                <div class="card"><div class="label">Fichas de hallazgos</div><div class="value">{m['fichas']}</div></div>
-            </div>
-            <div class="section">
-                <h2>Entidades federativas evaluadas</h2>
-                <table>
-                    <thead><tr><th>Clave</th><th>Estado</th><th>Estatus</th><th>Documentos</th></tr></thead>
-                    <tbody>{render_entidades_tabla(m)}</tbody>
-                </table>
-            </div>
-            <div class="section">
-                <h2>Timeline de eventos recientes</h2>
-                <div class="timeline">{render_timeline(data['audit'])}</div>
-            </div>
-        </div>
-        """
-
-    def tab_content_etapa(tab):
-        etapa_key = ETAPA_KEY_BY_TAB[tab]
-        gates_etapa = gates_por_etapa[etapa_key]
-        ok = sum(1 for e, p, _ in gates_etapa if data["gates"].get((e, p)) and data["gates"][(e, p)]["decision"] == "aprobado")
-        total = len(gates_etapa)
-        pct_val = int(ok * 100 / total) if total else 0
-        bar_class = "green" if pct_val == 100 else ("yellow" if pct_val >= 50 else "red")
-        clase = tab.replace("etapa_", "e")
-
-        stats_html = ""
-        for label, val in stats_etapa(tab):
-            stats_html += f'<div class="card"><div class="label">{label}</div><div class="value">{val}</div></div>'
-
-        gates_html = render_gates_list(gates_etapa, data)
-
-        return f"""
-        <div id="tab-{tab}" class="tab-content">
-            <div class="etapa-progress">
-                <span class="etapa-tag {clase}">{tab.replace('_', ' ').upper()}</span>
-                <div class="bar"><div class="fill {bar_class}" style="width: {pct_val}%"></div></div>
-                <div class="pct">{pct_val}%</div>
-            </div>
-            <div class="grid">{stats_html}</div>
-            <div class="section">
-                <h2>Gates de control registrados ({ok}/{total})</h2>
-                {gates_html}
-            </div>
-        </div>
-        """
 
     # Tabs
     tabs_html = []
@@ -431,7 +483,73 @@ h1{{color:#a00}}</style></head>
         active = " active" if tab_id == "resumen" else ""
         tabs_html.append(f'<div class="tab{active}" data-tab="{tab_id}">{tab_label}</div>')
 
-    # JavaScript para los tabs
+    # Contenido de cada tab
+    tab_resumen = f"""
+    <div id="tab-resumen" class="tab-content active">
+        <div class="grid">
+            <div class="card"><div class="label">Normas procesadas</div><div class="value">{m['normas']}</div></div>
+            <div class="card"><div class="label">Unidades normativas</div><div class="value">{m['unidades']}</div></div>
+            <div class="card"><div class="label">Actores en directorio</div><div class="value">{m['actores']}</div></div>
+            <div class="card"><div class="label">Aristas ARS</div><div class="value">{m['aristas']}</div></div>
+            <div class="card"><div class="label">Fichas Anexo 10</div><div class="value">{m['fichas']}</div></div>
+            <div class="card"><div class="label">Documentos ingestados</div><div class="value">{m['documentos']}</div></div>
+        </div>
+        <div class="section">
+            <h2>Lista de normas y conversiones ({len(normas)})</h2>
+            <p style="color:#6b7280;font-size:13px;margin-bottom:12px">
+                Parametros de cada conversion PDF -> MD y metricas de calidad.
+                Click en una norma para ver el detalle expandido.
+            </p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>id_norma</th><th>Nombre</th><th>Nivel</th><th>Jerarquia</th>
+                        <th>Archivo</th><th>Prompt</th><th>Pags</th>
+                        <th>Cov</th><th>Sim</th><th>Score</th><th>Rating</th>
+                    </tr>
+                </thead>
+                <tbody>{render_norms_table(normas, db_path)}</tbody>
+            </table>
+        </div>
+        <div class="section">
+            <h2>Detalle de cada norma</h2>
+            {render_norms_detail(normas, db_path)}
+        </div>
+        <div class="section">
+            <h2>Entidades federativas evaluadas</h2>
+            <table>
+                <thead><tr><th>Clave</th><th>Estado</th><th>Estatus</th><th>Documentos</th></tr></thead>
+                <tbody>{render_entidades_table(m)}</tbody>
+            </table>
+        </div>
+        <div class="section">
+            <h2>Timeline de eventos</h2>
+            <div class="timeline">{render_audit(data['audit'])}</div>
+        </div>
+    </div>
+    """
+
+    # Tabs de etapa (más simples, muestran conteo de entidades por etapa)
+    def tab_etapa(tab_key, title, descripcion):
+        return f"""
+        <div id="tab-{tab_key}" class="tab-content">
+            <div class="section">
+                <h2>{title}</h2>
+                <p style="color:#6b7280">{descripcion}</p>
+                <p style="color:#9ca3af;font-size:13px;margin-top:24px">
+                    Para ver las normas/conversiones de esta etapa, ve al tab <b>Resumen</b>.
+                </p>
+            </div>
+        </div>
+        """
+
+    tab_etapa_1 = tab_etapa("etapa_1", "Etapa 1: Analisis Documental",
+                            f"{m['normas']} normas procesadas, {m['unidades']} unidades normativas extraidas, {m['actores']} actores en directorio.")
+    tab_etapa_2 = tab_etapa("etapa_2", "Etapa 2: Campo + ARS",
+                            f"{m['aristas']} aristas ARS registradas.")
+    tab_etapa_3 = tab_etapa("etapa_3", "Etapa 3: Triangulacion",
+                            f"{m['fichas']} fichas de hallazgos generadas.")
+
     js = """
     <script>
     document.querySelectorAll('.tab').forEach(tab => {
@@ -464,20 +582,16 @@ h1{{color:#a00}}</style></head>
         <span><b>BD:</b> <code>{db_path.name}</code></span>
         <span><b>Generado:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</span>
     </div>
-    <div class="progress-global">
-        <div class="label">Avance global del pipeline: {avance_total} de 15 gates registrados</div>
-        <div class="bar"><div class="fill" style="width: {int(avance_total/15*100)}%"></div></div>
-    </div>
 </div>
 
 <div class="tabs">
     {''.join(tabs_html)}
 </div>
 
-{tab_content_resumen()}
-{tab_content_etapa("etapa_1")}
-{tab_content_etapa("etapa_2")}
-{tab_content_etapa("etapa_3")}
+{tab_resumen}
+{tab_etapa_1}
+{tab_etapa_2}
+{tab_etapa_3}
 
 <div class="footer">
     Generado por <code>fasp_dashboard.py</code> · Skill fasp-document-pipeline v1.1
@@ -490,7 +604,7 @@ h1{{color:#a00}}</style></head>
 
 
 def main():
-    p = argparse.ArgumentParser(description="Dashboard HTML con tabs para el pipeline FASP")
+    p = argparse.ArgumentParser(description="Dashboard HTML del pipeline FASP")
     p.add_argument("--db", required=True)
     p.add_argument("--output", required=True)
     args = p.parse_args()
@@ -511,6 +625,7 @@ def main():
         m = data["metricas"]
         print(f"  Metricas: {m['normas']} normas, {m['unidades']} unidades, "
               f"{m['actores']} actores, {m['aristas']} aristas")
+        print(f"  Lista de normas: {len(data['normas'])}")
 
     print(f"OK Dashboard escrito en {output}")
     print(f"  Para abrirlo: open {output}")
