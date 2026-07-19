@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 """
-fasp_dashboard.py — Genera un dashboard HTML de seguimiento del pipeline FASP.
+fasp_dashboard.py — Dashboard HTML con tabs para el pipeline FASP.
 
-Lee la BD SQLite del skill y produce un HTML autocontenido (sin dependencias
-externas, sin servidor web) que muestra:
-
-  1. Header con metadata del programa
-  2. Metricas globales (normas, unidades, actores, aristas, checkpoints, fichas)
-  3. Estado de las 3 etapas con los 15 gates humanos (5 perfiles x 3 etapas)
-  4. Tabla de las 8 entidades federativas con su estado
-  5. Timeline de los ultimos 20 eventos del audit_log
+Genera un HTML autocontenido (sin servidor, sin frameworks externos) con
+4 pestañas: Resumen, Etapa 1, Etapa 2, Etapa 3. Cada tab muestra:
+  - Métricas globales en el tab Resumen
+  - Los 5 gates de cada etapa en su tab correspondiente
+  - Tabla de entidades federativas + timeline en cada tab
 
 Uso:
     python3 fasp_dashboard.py --db ./fasp.db --output ./dashboard.html
@@ -19,7 +16,6 @@ import argparse, pathlib, sqlite3
 from datetime import datetime
 
 
-# 15 gates reales del Plan de Trabajo FASP 2026
 PIPELINE_GATES = [
     ("etapa_1_documental", "coordinadora", "Revision general de la Ficha tecnica FASP y coherencia global"),
     ("etapa_1_documental", "analista_senior_juridico", "Revision de la matriz de congruencia y directorio preliminar"),
@@ -58,10 +54,17 @@ PERFILES_LABEL = {
     "coordinacion_evaluacion": "Coordinacion de Evaluacion",
 }
 
-ETAPAS_LABEL = {
-    "etapa_1_documental": "Etapa 1: Analisis Documental",
-    "etapa_2_campo_ars": "Etapa 2: Campo + ARS",
-    "etapa_3_triangulacion": "Etapa 3: Triangulacion + Recomendaciones",
+ETAPAS_TABS = [
+    ("resumen", "Resumen"),
+    ("etapa_1", "Etapa 1: Documental"),
+    ("etapa_2", "Etapa 2: Campo + ARS"),
+    ("etapa_3", "Etapa 3: Triangulacion"),
+]
+
+ETAPA_KEY_BY_TAB = {
+    "etapa_1": "etapa_1_documental",
+    "etapa_2": "etapa_2_campo_ars",
+    "etapa_3": "etapa_3_triangulacion",
 }
 
 
@@ -90,11 +93,12 @@ def query_db(db_path: pathlib.Path) -> dict:
                 "checkpoints_rechazados": conn.execute("SELECT COUNT(*) FROM checkpoints WHERE decision='rechazado'").fetchone()[0],
                 "fichas": conn.execute("SELECT COUNT(*) FROM fichas").fetchone()[0],
             },
-            "gates_aprobados": {},
-            "gates_rechazados": {},
+            "gates": {},  # (etapa, perfil) -> {estado, fecha, aprobador}
             "audit": [],
+            "metricas_por_etapa": {},
         }
 
+        # Cargar último estado de cada gate conocido.
         for etapa, perfil, _ in PIPELINE_GATES:
             row = conn.execute("""
                 SELECT decision, aprobador, fecha
@@ -102,13 +106,13 @@ def query_db(db_path: pathlib.Path) -> dict:
                 WHERE etapa = ? AND perfil = ?
                 ORDER BY id DESC LIMIT 1
             """, (etapa, perfil)).fetchone()
+            key = (etapa, perfil)
             if row:
-                key = (etapa, perfil)
-                if row["decision"] == "aprobado":
-                    data["gates_aprobados"][key] = row
-                elif row["decision"] == "rechazado":
-                    data["gates_rechazados"][key] = row
+                data["gates"][key] = dict(row)
+            else:
+                data["gates"][key] = None
 
+        # Audit
         for r in conn.execute("""
             SELECT timestamp, modulo, accion, tabla, detalle
             FROM audit_log
@@ -116,9 +120,98 @@ def query_db(db_path: pathlib.Path) -> dict:
         """):
             data["audit"].append(dict(r))
 
+        # Métricas por etapa (las que podemos calcular rápido)
+        data["metricas_por_etapa"] = {
+            "etapa_1": {
+                "normas": data["metricas"]["normas"],
+                "unidades": data["metricas"]["unidades"],
+                "actores": data["metricas"]["actores"],
+            },
+            "etapa_2": {
+                "aristas": data["metricas"]["aristas"],
+            },
+            "etapa_3": {
+                "fichas": data["metricas"]["fichas"],
+            },
+        }
+
     finally:
         conn.close()
     return data
+
+
+def render_gate(gate_state):
+    """Renderiza un gate individual con su chip de estado."""
+    if gate_state is None:
+        chip = "pendiente"
+        label = "PENDIENTE"
+        fecha = ""
+        aprobador = ""
+    else:
+        chip = gate_state["decision"]
+        label = gate_state["decision"].upper()
+        fecha = gate_state.get("fecha", "")[:10] if gate_state.get("fecha") else ""
+        aprobador = gate_state.get("aprobador", "") or ""
+    return f'<div class="gate"><span class="chip {chip}">{label}</span><div class="gate-meta">{fecha} · {aprobador}</div></div>'
+
+
+def render_gates_list(gates_list, data):
+    """Renderiza la lista de gates con su descripción y estado."""
+    html = []
+    for etapa, perfil, descripcion in gates_list:
+        key = (etapa, perfil)
+        state = data["gates"].get(key)
+        chip_class = "pendiente"
+        label = "PENDIENTE"
+        fecha = "—"
+        aprobador = "—"
+
+        if state:
+            chip_class = state["decision"]
+            label = state["decision"].upper()
+            fecha = (state.get("fecha") or "")[:10] or "—"
+            aprobador = state.get("aprobador") or "—"
+
+        html.append(f"""<div class="gate-card">
+            <div class="gate-card-left">
+                <span class="chip {chip_class}">{label}</span>
+                <span class="gate-card-perfil">{PERFILES_LABEL[perfil]}</span>
+            </div>
+            <div class="gate-card-desc">{descripcion}</div>
+            <div class="gate-card-right">
+                <div class="gate-card-fecha">{fecha}</div>
+                <div class="gate-card-aprobador">{aprobador}</div>
+            </div>
+        </div>""")
+    return "\n".join(html)
+
+
+def render_entidades_tabla(m):
+    rows = []
+    for edo, nombre in ENTIDADES_FEDERATIVAS:
+        docs_edo = m["documentos"] if edo == "NAL" else 0
+        estado_badge = '<span class="badge green">Activo</span>' if docs_edo > 0 else '<span class="badge gray">Sin datos</span>'
+        rows.append(f"""<tr>
+            <td><code>{edo}</code></td>
+            <td>{nombre}</td>
+            <td>{estado_badge}</td>
+            <td>{docs_edo} docs</td>
+        </tr>""")
+    return "\n".join(rows)
+
+
+def render_timeline(audit):
+    if not audit:
+        return '<div class="empty">Sin eventos registrados aun.</div>'
+    entries = []
+    for e in audit:
+        detalle = (e["detalle"] or "")[:100]
+        entries.append(f"""<div class="timeline-entry">
+            <div class="time">{e["timestamp"]}</div>
+            <span class="mod">{e["modulo"]}</span> · {e["accion"]} en {e["tabla"]}
+            {f'<div class="detalle">{detalle}</div>' if detalle else ""}
+        </div>""")
+    return "\n".join(entries)
 
 
 def render_html(data: dict, db_path: pathlib.Path) -> str:
@@ -135,45 +228,55 @@ h1{{color:#a00}}</style></head>
     m = data["metricas"]
     meta = data.get("meta", {})
 
-    gates_por_etapa = {"etapa_1_documental": [], "etapa_2_campo_ars": [], "etapa_3_triangulacion": []}
-    for etapa, perfil, descripcion in PIPELINE_GATES:
-        key = (etapa, perfil)
-        if key in data["gates_aprobados"]:
-            estado = "aprobado"
-            fecha = data["gates_aprobados"][key]["fecha"]
-            aprobador = data["gates_aprobados"][key]["aprobador"]
-        elif key in data["gates_rechazados"]:
-            estado = "rechazado"
-            fecha = data["gates_rechazados"][key]["fecha"]
-            aprobador = data["gates_rechazados"][key]["aprobador"]
-        else:
-            estado = "pendiente"
-            fecha = None
-            aprobador = None
-        gates_por_etapa[etapa].append({
-            "etapa": etapa, "perfil": perfil, "descripcion": descripcion,
-            "estado": estado, "fecha": fecha, "aprobador": aprobador
-        })
+    # Calcular avance por etapa
+    def pct_etapa(tab_key):
+        etapa_key = ETAPA_KEY_BY_TAB[tab_key]
+        gates_etapa = [(e, p, d) for e, p, d in PIPELINE_GATES if e == etapa_key]
+        ok = sum(1 for e, p, _ in gates_etapa if data["gates"].get((e, p)) and data["gates"][(e, p)]["decision"] == "aprobado")
+        return ok, len(gates_etapa)
+    _ = pct_etapa  # evitar warning de no usado
 
-    def pct(etapa):
-        total = len(gates_por_etapa[etapa])
-        ok = sum(1 for g in gates_por_etapa[etapa] if g["estado"] == "aprobado")
-        return int(ok * 100 / total) if total > 0 else 0
+    # Gates por etapa para los tabs
+    gates_por_etapa = {
+        "etapa_1_documental": [(e, p, d) for e, p, d in PIPELINE_GATES if e == "etapa_1_documental"],
+        "etapa_2_campo_ars": [(e, p, d) for e, p, d in PIPELINE_GATES if e == "etapa_2_campo_ars"],
+        "etapa_3_triangulacion": [(e, p, d) for e, p, d in PIPELINE_GATES if e == "etapa_3_triangulacion"],
+    }
 
-    avance = {e: pct(e) for e in gates_por_etapa}
-    avance_total = int(sum(avance.values()) / len(avance)) if avance else 0
+    avance_total = sum(1 for k, v in data["gates"].items()
+                       if v and v["decision"] == "aprobado")
 
     css = """
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-           margin: 0; padding: 0; background: #f5f7fa; color: #1f2937; }
+           background: #f5f7fa; color: #1f2937; line-height: 1.5; }
     .container { max-width: 1400px; margin: 0 auto; padding: 24px; }
     .header { background: linear-gradient(135deg, #1a4480 0%, #2d5e8e 100%);
-              color: white; padding: 32px; border-radius: 12px;
-              margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
-    .header h1 { margin: 0 0 8px 0; font-size: 28px; font-weight: 700; }
-    .header .subtitle { opacity: 0.9; font-size: 14px; }
-    .header .meta { display: flex; gap: 24px; margin-top: 16px; flex-wrap: wrap; font-size: 13px; }
+              color: white; padding: 32px; border-radius: 12px; margin-bottom: 16px;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .header h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+    .header .subtitle { opacity: 0.9; font-size: 14px; margin-bottom: 16px; }
+    .header .meta { display: flex; gap: 24px; flex-wrap: wrap; font-size: 13px; }
+    .header .meta span { opacity: 0.9; }
+    .progress-global { margin-top: 16px; }
+    .progress-global .label { font-size: 13px; opacity: 0.9; margin-bottom: 6px; }
+    .progress-global .bar { height: 12px; background: rgba(255,255,255,0.2);
+                            border-radius: 6px; overflow: hidden; }
+    .progress-global .fill { height: 100%; background: #10b981; border-radius: 6px;
+                              transition: width 0.4s; }
+    /* Tabs */
+    .tabs { display: flex; gap: 0; border-bottom: 2px solid #e5e7eb; margin-bottom: 24px;
+            background: white; border-radius: 10px 10px 0 0; padding: 0 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .tab { padding: 14px 22px; cursor: pointer; font-size: 14px; font-weight: 600;
+           color: #6b7280; border-bottom: 3px solid transparent; margin-bottom: -2px;
+           transition: all 0.15s; user-select: none; }
+    .tab:hover { color: #1a4480; background: #f9fafb; }
+    .tab.active { color: #1a4480; border-bottom-color: #1a4480; background: white; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; animation: fadeIn 0.3s; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    /* Cards */
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 16px; margin-bottom: 24px; }
     .card { background: white; border-radius: 10px; padding: 20px;
@@ -181,118 +284,172 @@ h1{{color:#a00}}</style></head>
     .card .label { font-size: 11px; color: #6b7280; text-transform: uppercase;
                    letter-spacing: 0.05em; font-weight: 600; margin-bottom: 8px; }
     .card .value { font-size: 32px; font-weight: 700; color: #111827; line-height: 1; }
-    .stages { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
-    @media (max-width: 900px) { .stages { grid-template-columns: 1fr; } }
-    .stage { background: white; border-radius: 10px; padding: 20px;
-             box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-    .stage h3 { margin: 0 0 12px 0; font-size: 16px; color: #111827; }
-    .stage .progress { height: 8px; background: #e5e7eb; border-radius: 4px;
-                       overflow: hidden; margin-bottom: 12px; }
-    .stage .progress-bar { height: 100%; transition: width 0.3s; }
-    .stage .progress-bar.green { background: #10b981; }
-    .stage .progress-bar.yellow { background: #f59e0b; }
-    .stage .progress-bar.red { background: #ef4444; }
-    .gate { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
-            margin-bottom: 6px; background: #f9fafb; border-radius: 6px;
-            font-size: 13px; }
-    .gate .chip { padding: 2px 10px; border-radius: 12px; font-size: 11px;
-                  font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
-                  white-space: nowrap; }
-    .gate .chip.green { background: #d1fae5; color: #065f46; }
-    .gate .chip.yellow { background: #fef3c7; color: #92400e; }
-    .gate .chip.red { background: #fee2e2; color: #991b1b; }
-    .gate .desc { flex: 1; color: #4b5563; }
-    .gate .meta-info { font-size: 11px; color: #9ca3af; }
-    .section { background: white; border-radius: 10px; padding: 24px;
-               box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 24px; }
-    .section h2 { margin: 0 0 16px 0; font-size: 18px; color: #111827; }
+    /* Tabla */
+    .section { background: white; border-radius: 0 0 10px 10px; padding: 24px;
+               box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 16px; }
+    .section h2 { font-size: 18px; color: #111827; margin-bottom: 16px; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #e5e7eb; }
     th { background: #f9fafb; font-weight: 600; color: #374151; font-size: 12px; }
     tr:hover { background: #f9fafb; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    /* Gate card */
+    .gate-card { display: grid; grid-template-columns: 280px 1fr 200px; gap: 16px;
+                 padding: 14px 16px; margin-bottom: 8px; background: #f9fafb;
+                 border-radius: 8px; align-items: center; }
+    .gate-card:hover { background: #f3f4f6; }
+    .gate-card-left { display: flex; align-items: center; gap: 10px; }
+    .gate-card-perfil { font-weight: 600; font-size: 13px; color: #1f2937; }
+    .gate-card-desc { font-size: 13px; color: #4b5563; }
+    .gate-card-right { text-align: right; font-size: 11px; color: #9ca3af; }
+    .gate-card-fecha { font-weight: 600; color: #4b5563; }
+    .gate-card-aprobador { color: #6b7280; }
+    /* Chips */
+    .chip { display: inline-block; padding: 3px 10px; border-radius: 12px;
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 0.05em; white-space: nowrap; }
+    .chip.aprobado { background: #d1fae5; color: #065f46; }
+    .chip.pendiente { background: #fef3c7; color: #92400e; }
+    .chip.rechazado { background: #fee2e2; color: #991b1b; }
+    /* Badges */
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px;
+             font-size: 11px; font-weight: 600; }
     .badge.green { background: #d1fae5; color: #065f46; }
     .badge.gray { background: #f3f4f6; color: #6b7280; }
+    /* Timeline */
     .timeline-entry { padding: 10px 12px; border-left: 3px solid #e5e7eb;
-                       margin-bottom: 6px; background: #f9fafb; border-radius: 0 6px 6px 0; }
+                       margin-bottom: 6px; background: #f9fafb;
+                       border-radius: 0 6px 6px 0; }
     .timeline-entry .time { font-size: 11px; color: #9ca3af; }
     .timeline-entry .mod { font-weight: 600; color: #1a4480; }
+    .timeline-entry .detalle { color: #6b7280; font-size: 12px; margin-top: 4px; }
     .empty { color: #9ca3af; font-style: italic; padding: 12px; text-align: center;
              background: #f9fafb; border-radius: 6px; }
     .footer { text-align: center; padding: 24px; color: #9ca3af; font-size: 12px; }
-    .progress-global { margin-top: 16px; }
-    .progress-global .bar { height: 12px; background: rgba(255,255,255,0.2);
-                            border-radius: 6px; overflow: hidden; margin-top: 8px; }
-    .progress-global .fill { height: 100%; background: #10b981; border-radius: 6px; }
+    /* Etiqueta de etapa */
+    .etapa-tag { display: inline-block; padding: 4px 12px; border-radius: 6px;
+                 background: #dbeafe; color: #1e40af; font-size: 12px;
+                 font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+    .etapa-tag.e1 { background: #dbeafe; color: #1e40af; }
+    .etapa-tag.e2 { background: #ede9fe; color: #5b21b6; }
+    .etapa-tag.e3 { background: #fef3c7; color: #92400e; }
+    .etapa-progress { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    .etapa-progress .bar { flex: 1; height: 10px; background: #e5e7eb;
+                            border-radius: 5px; overflow: hidden; }
+    .etapa-progress .fill { height: 100%; transition: width 0.3s; }
+    .etapa-progress .fill.green { background: #10b981; }
+    .etapa-progress .fill.yellow { background: #f59e0b; }
+    .etapa-progress .fill.red { background: #ef4444; }
+    .etapa-progress .pct { font-weight: 700; font-size: 14px; min-width: 40px; text-align: right; }
     """
 
-    def render_gate(g):
-        chip_class = {"aprobado": "green", "pendiente": "yellow", "rechazado": "red"}[g["estado"]]
-        meta_info = ""
-        if g["estado"] == "aprobado" and g["fecha"]:
-            fecha_corta = g["fecha"][:10]
-            meta_info = f'<span class="meta-info">{fecha_corta} · {g["aprobador"] or ""}</span>'
-        return f"""<div class="gate">
-            <span class="chip {chip_class}">{g["estado"]}</span>
-            <span class="desc">{PERFILES_LABEL[g["perfil"]]}: {g["descripcion"]}</span>
-            {meta_info}
-        </div>"""
+    # Stats por etapa para mostrar
+    def stats_etapa(tab):
+        if tab == "etapa_1":
+            return [
+                ("Normas procesadas", m['normas']),
+                ("Unidades normativas", m['unidades']),
+                ("Actores en directorio", m['actores']),
+            ]
+        elif tab == "etapa_2":
+            return [
+                ("Aristas ARS", m['aristas']),
+                ("Checkpoints Etapa 2 firmados",
+                 sum(1 for e, p in data["gates"] if e == "etapa_2_campo_ars"
+                     and data["gates"][(e, p)] and data["gates"][(e, p)]["decision"] == "aprobado")),
+            ]
+        elif tab == "etapa_3":
+            return [
+                ("Fichas de hallazgos (Anexo 10)", m['fichas']),
+                ("Checkpoints Etapa 3 firmados",
+                 sum(1 for e, p in data["gates"] if e == "etapa_3_triangulacion"
+                     and data["gates"][(e, p)] and data["gates"][(e, p)]["decision"] == "aprobado")),
+            ]
+        return []
 
-    def render_stage(etapa_key, gates):
-        pct_val = avance[etapa_key]
-        bar_class = "green" if pct_val == 100 else ("yellow" if pct_val >= 50 else "red")
-        ok = sum(1 for g in gates if g["estado"] == "aprobado")
-        pend = sum(1 for g in gates if g["estado"] == "pendiente")
-        rech = sum(1 for g in gates if g["estado"] == "rechazado")
+    # Generar contenido de cada tab
+    def tab_content_resumen():
+        ok = sum(1 for k, v in data["gates"].items() if v and v["decision"] == "aprobado")
+        total = len(data["gates"])
         return f"""
-        <div class="stage">
-            <h3>{ETAPAS_LABEL[etapa_key]}</h3>
-            <div class="progress"><div class="progress-bar {bar_class}" style="width: {pct_val}%"></div></div>
-            <div class="pct">{ok}/{len(gates)} gates aprobados · {pend} pendientes · {rech} rechazados</div>
-            {''.join(render_gate(g) for g in gates)}
-        </div>"""
-
-    def render_entidades():
-        rows = []
-        for edo, nombre in ENTIDADES_FEDERATIVAS:
-            docs_edo = m["documentos"] if edo == "NAL" else 0
-            estado_badge = '<span class="badge green">Activo</span>' if docs_edo > 0 else '<span class="badge gray">Sin datos</span>'
-            rows.append(f"""<tr>
-                <td><code>{edo}</code></td>
-                <td>{nombre}</td>
-                <td>{estado_badge}</td>
-                <td>{docs_edo} docs</td>
-            </tr>""")
-        return "\n".join(rows)
-
-    def render_audit():
-        if not data["audit"]:
-            return '<div class="empty">Sin eventos registrados aun.</div>'
-        entries = []
-        for e in data["audit"]:
-            detalle = (e["detalle"] or "")[:80]
-            entries.append(f"""<div class="timeline-entry">
-                <div class="time">{e["timestamp"]}</div>
-                <span class="mod">{e["modulo"]}</span> · {e["accion"]} en {e["tabla"]}
-                {f'<div style="color:#6b7280;font-size:12px;margin-top:4px">{detalle}</div>' if detalle else ""}
-            </div>""")
-        return "\n".join(entries)
-
-    avance_global_html = ""
-    if avance_total > 0:
-        avance_global_html = f"""
-        <div class="progress-global">
-            <div style="font-size:13px;opacity:0.9">Avance global del pipeline</div>
-            <div class="bar"><div class="fill" style="width: {avance_total}%"></div></div>
-            <div style="font-size:11px;opacity:0.8;margin-top:4px">{avance_total}% ({m['checkpoints_aprobados']} gates firmados de 15)</div>
+        <div id="tab-resumen" class="tab-content active">
+            <div class="grid">
+                <div class="card"><div class="label">Normas procesadas</div><div class="value">{m['normas']}</div></div>
+                <div class="card"><div class="label">Unidades normativas</div><div class="value">{m['unidades']}</div></div>
+                <div class="card"><div class="label">Actores en directorio</div><div class="value">{m['actores']}</div></div>
+                <div class="card"><div class="label">Aristas ARS</div><div class="value">{m['aristas']}</div></div>
+                <div class="card"><div class="label">Checkpoints firmados</div>
+                    <div class="value" style="color:#10b981">{ok}/{total}</div></div>
+                <div class="card"><div class="label">Fichas de hallazgos</div><div class="value">{m['fichas']}</div></div>
+            </div>
+            <div class="section">
+                <h2>Entidades federativas evaluadas</h2>
+                <table>
+                    <thead><tr><th>Clave</th><th>Estado</th><th>Estatus</th><th>Documentos</th></tr></thead>
+                    <tbody>{render_entidades_tabla(m)}</tbody>
+                </table>
+            </div>
+            <div class="section">
+                <h2>Timeline de eventos recientes</h2>
+                <div class="timeline">{render_timeline(data['audit'])}</div>
+            </div>
         </div>
         """
+
+    def tab_content_etapa(tab):
+        etapa_key = ETAPA_KEY_BY_TAB[tab]
+        gates_etapa = gates_por_etapa[etapa_key]
+        ok = sum(1 for e, p, _ in gates_etapa if data["gates"].get((e, p)) and data["gates"][(e, p)]["decision"] == "aprobado")
+        total = len(gates_etapa)
+        pct_val = int(ok * 100 / total) if total else 0
+        bar_class = "green" if pct_val == 100 else ("yellow" if pct_val >= 50 else "red")
+        clase = tab.replace("etapa_", "e")
+
+        stats_html = ""
+        for label, val in stats_etapa(tab):
+            stats_html += f'<div class="card"><div class="label">{label}</div><div class="value">{val}</div></div>'
+
+        gates_html = render_gates_list(gates_etapa, data)
+
+        return f"""
+        <div id="tab-{tab}" class="tab-content">
+            <div class="etapa-progress">
+                <span class="etapa-tag {clase}">{tab.replace('_', ' ').upper()}</span>
+                <div class="bar"><div class="fill {bar_class}" style="width: {pct_val}%"></div></div>
+                <div class="pct">{pct_val}%</div>
+            </div>
+            <div class="grid">{stats_html}</div>
+            <div class="section">
+                <h2>Gates de aprobacion humana ({ok}/{total} firmados)</h2>
+                {gates_html}
+            </div>
+        </div>
+        """
+
+    # Tabs
+    tabs_html = []
+    for tab_id, tab_label in ETAPAS_TABS:
+        active = " active" if tab_id == "resumen" else ""
+        tabs_html.append(f'<div class="tab{active}" data-tab="{tab_id}">{tab_label}</div>')
+
+    # JavaScript para los tabs
+    js = """
+    <script>
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+        });
+    });
+    </script>
+    """
 
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>FASP — Dashboard de Seguimiento</title>
+<title>FASP — Dashboard</title>
 <style>{css}</style>
 </head>
 <body>
@@ -307,49 +464,33 @@ h1{{color:#a00}}</style></head>
         <span><b>BD:</b> <code>{db_path.name}</code></span>
         <span><b>Generado:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</span>
     </div>
-    {avance_global_html}
+    <div class="progress-global">
+        <div class="label">Avance global del pipeline: {avance_total} de 15 gates firmados</div>
+        <div class="bar"><div class="fill" style="width: {int(avance_total/15*100)}%"></div></div>
+    </div>
 </div>
 
-<div class="grid">
-    <div class="card"><div class="label">Normas procesadas</div><div class="value">{m['normas']}</div></div>
-    <div class="card"><div class="label">Unidades normativas</div><div class="value">{m['unidades']}</div></div>
-    <div class="card"><div class="label">Actores en directorio</div><div class="value">{m['actores']}</div></div>
-    <div class="card"><div class="label">Aristas ARS</div><div class="value">{m['aristas']}</div></div>
-    <div class="card"><div class="label">Checkpoints firmados</div><div class="value" style="color:#10b981">{m['checkpoints_aprobados']}</div></div>
-    <div class="card"><div class="label">Fichas de hallazgos</div><div class="value">{m['fichas']}</div></div>
+<div class="tabs">
+    {''.join(tabs_html)}
 </div>
 
-<h2 style="margin: 0 0 16px 0; font-size: 18px; color: #111827;">Estado de las 3 etapas del pipeline</h2>
-<div class="stages">
-    {render_stage("etapa_1_documental", gates_por_etapa["etapa_1_documental"])}
-    {render_stage("etapa_2_campo_ars", gates_por_etapa["etapa_2_campo_ars"])}
-    {render_stage("etapa_3_triangulacion", gates_por_etapa["etapa_3_triangulacion"])}
-</div>
-
-<div class="section">
-    <h2>Entidades federativas evaluadas</h2>
-    <table>
-        <thead><tr><th>Clave</th><th>Estado</th><th>Estatus</th><th>Documentos</th></tr></thead>
-        <tbody>{render_entidades()}</tbody>
-    </table>
-</div>
-
-<div class="section">
-    <h2>Timeline de eventos recientes (audit_log)</h2>
-    <div class="timeline">{render_audit()}</div>
-</div>
+{tab_content_resumen()}
+{tab_content_etapa("etapa_1")}
+{tab_content_etapa("etapa_2")}
+{tab_content_etapa("etapa_3")}
 
 <div class="footer">
     Generado por <code>fasp_dashboard.py</code> · Skill fasp-document-pipeline v1.1
 </div>
 
 </div>
+{js}
 </body>
 </html>"""
 
 
 def main():
-    p = argparse.ArgumentParser(description="Dashboard HTML de seguimiento del pipeline FASP")
+    p = argparse.ArgumentParser(description="Dashboard HTML con tabs para el pipeline FASP")
     p.add_argument("--db", required=True)
     p.add_argument("--output", required=True)
     args = p.parse_args()
@@ -370,8 +511,6 @@ def main():
         m = data["metricas"]
         print(f"  Metricas: {m['normas']} normas, {m['unidades']} unidades, "
               f"{m['actores']} actores, {m['aristas']} aristas")
-        print(f"  Checkpoints: {m['checkpoints_aprobados']} aprobados, "
-              f"{m['checkpoints_pendientes']} pendientes")
 
     print(f"OK Dashboard escrito en {output}")
     print(f"  Para abrirlo: open {output}")
