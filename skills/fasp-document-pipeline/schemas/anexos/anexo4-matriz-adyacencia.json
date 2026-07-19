@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Anexo4MatrizAdyacencia",
+  "description": "Anexo 4 — Matriz de adyacencia Actor-Actor (Producto 2, generada por PY-2).",
+  "type": "object",
+  "required": ["matriz"],
+  "properties": {
+    "nodos": { "type": "array", "items": { "type": "string" } },
+    "matriz": {
+      "type": "array",
+      "description": "Lista de aristas con peso (escala de intensidad ARS).",
+      "items": {
+        "type": "object",
+        "required": ["origen", "destino", "peso", "tipo_vinculo"],
+        "properties": {
+          "origen": { "type": "string" },
+          "destino": { "type": "string" },
+          "peso": { "type": "number", "minimum": 0, "maximum": 10, "description": "Escala de intensidad definida en la Memoria algorítmica" },
+          "tipo_vinculo": {
+            "type": "string",
+            "enum": ["Formal", "Informal", "Jerárquico", "Operativo", "Consultivo"]
+          },
+          "direccionalidad": { "type": "string", "enum": ["unidireccional", "bidireccional"] },
+          "frecuencia": { "type": "string", "enum": ["diaria", "semanal", "mensual", "trimestral", "ocasional"] },
+          "canal": { "type": "string", "enum": ["oficial", "informal", "electrónico", "presencial", "mixto"] },
+          "etapa_ciclo": {
+            "type": "string",
+            "enum": ["Integración", "Distribución", "Administración", "Supervisión", "Seguimiento"]
+          },
+          "evidencia_doc_id": { "type": "string" }
+        }
+      }
+    }
+  }
+}

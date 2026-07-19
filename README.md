@@ -8,6 +8,7 @@ Catálogo de skills personalizados para agentes IA, creados y mantenidos por Alf
 |---|---|---|
 | [`biblio-metadata-extractor`](skills/biblio-metadata-extractor/) | Extrae metadatos bibliográficos (PDFs, páginas web, informes institucionales, libros, artículos académicos) a un JSON estricto de 12 claves. | `productivity` |
 | [`pdf-to-knowledge-graph`](skills/pdf-to-knowledge-graph/) | Pipeline de 3 etapas (PDF→MD→entidades→grafo) para análisis de gobernanza: extrae texto, identifica entidades por capa (normativo/operativo/informal), y construye un grafo NetworkX con métricas de red (densidad, comunidades, centralidad, actores transversales). | `productivity` |
+| [`fasp-document-pipeline`](skills/fasp-document-pipeline/) | Pipeline LLM–Python–ARS para Evaluación Estratégica del FASP (Fondo de Aportaciones para la Seguridad Pública): 9 sub-skills LLM (1 funcional + 8 con prompts) + 4 scripts Python (todos funcionales) + BD SQLite con esquema para 12 anexos TdR + sistema de checkpoints por perfil humano + 5 taxonomías cerradas. | `productivity` |
 
 ## Estructura del repositorio
 

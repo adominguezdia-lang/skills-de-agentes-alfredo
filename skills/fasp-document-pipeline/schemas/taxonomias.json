@@ -1,0 +1,68 @@
+{
+  "_comment": "Taxonomías cerradas del dominio FASP. NO modificar sin actualizar schemas/taxonomias.json y los validadores en scripts/. Estas clases son fijas para que la matriz de congruencia (Anexo 2) y la red ARS (Anexos 4-6) sean comparables entre evaluaciones.",
+  "etapas_ciclo_fasp": [
+    "Integración",
+    "Distribución",
+    "Administración",
+    "Supervisión",
+    "Seguimiento"
+  ],
+  "dimensiones_ciclo": [
+    "Planeación",
+    "Asignación",
+    "Ejecución",
+    "Seguimiento",
+    "Rendición de cuentas"
+  ],
+  "tipos_competencia": [
+    "Exclusiva",
+    "Concurrente",
+    "Complementaria"
+  ],
+  "niveles_obligatoriedad": [
+    "Mandatoria",
+    "Facultativa",
+    "Recomendatoria"
+  ],
+  "tipos_vinculo_ars": [
+    "Formal",
+    "Informal",
+    "Jerárquico",
+    "Operativo",
+    "Consultivo"
+  ],
+  "niveles_gobierno": [
+    "Federal",
+    "Estatal",
+    "Municipal"
+  ],
+  "naturaleza_actor": [
+    "Formal",
+    "Informal"
+  ],
+  "etapas_pipeline": [
+    "etapa_1_documental",
+    "etapa_2_campo_ars",
+    "etapa_3_triangulacion"
+  ],
+  "estados_documento": [
+    "ingesta",
+    "extraccion",
+    "clasificacion",
+    "checkpoint_pendiente",
+    "aprobado",
+    "rechazado",
+    "publicado"
+  ],
+  "tipos_documento_entrada": [
+    "norma_federal",
+    "norma_estatal",
+    "norma_municipal",
+    "convenio_fasp",
+    "manual",
+    "lineamiento",
+    "transcripcion_entrevista",
+    "transcripcion_grupo_enfoque",
+    "resumen_entrevista"
+  ]
+}

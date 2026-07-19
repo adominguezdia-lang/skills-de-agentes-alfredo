@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Anexo10HallazgosRecomendaciones",
+  "description": "Anexo 10 — Hallazgos, recomendaciones y áreas de mejora (Producto 3, generado por LLM-8). Cada ficha sigue la estructura fija: verbo + producto/proceso + área de oportunidad + justificación + efecto esperado.",
+  "type": "object",
+  "required": ["fichas"],
+  "properties": {
+    "fichas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id_ficha", "verbo", "producto_proceso", "area_oportunidad", "justificacion", "efecto_esperado"],
+        "properties": {
+          "id_ficha": { "type": "string", "pattern": "^FCH-[0-9]+$" },
+          "categoria_tematica": {
+            "type": "string",
+            "enum": ["Normativo", "Organizacional", "Capacidades", "Canales de comunicación"]
+          },
+          "verbo": { "type": "string", "description": "Verbo en infinitivo que inicia la recomendación (ej. Crear, Modificar, Eliminar)" },
+          "producto_proceso": { "type": "string" },
+          "area_oportunidad": { "type": "string" },
+          "justificacion": { "type": "string" },
+          "efecto_esperado": { "type": "string" },
+          "viabilidad_SHCP_claridad": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "viabilidad_SHCP_relevancia": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "viabilidad_SHCP_justificacion": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "viabilidad_SHCP_factibilidad": { "type": "integer", "minimum": 1, "maximum": 5 },
+          "prioridad": { "type": "string", "enum": ["Alta", "Media", "Baja"] }
+        }
+      }
+    }
+  }
+}

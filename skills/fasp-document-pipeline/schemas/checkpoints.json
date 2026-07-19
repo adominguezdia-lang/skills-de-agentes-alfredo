@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CheckpointsFASP",
+  "description": "Perfiles humanos y gates de aprobación para las 3 etapas FASP.",
+  "type": "object",
+  "required": ["perfiles", "gates"],
+  "properties": {
+    "perfiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "rol", "autoridad_sobre"],
+        "properties": {
+          "id": { "type": "string", "enum": ["coordinadora", "analista_senior_juridico", "analista_senior_redes", "analistas_junior_grafos", "coordinacion_evaluacion"] },
+          "rol": { "type": "string" },
+          "autoridad_sobre": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "gates": {
+      "type": "array",
+      "description": "15 gates totales: 5 perfiles × 3 etapas. Cada gate requiere la firma del perfil autorizado antes de que el documento avance.",
+      "items": {
+        "type": "object",
+        "required": ["etapa", "perfil", "anexos_bloqueados", "descripcion"],
+        "properties": {
+          "etapa": { "type": "string", "enum": ["etapa_1_documental", "etapa_2_campo_ars", "etapa_3_triangulacion"] },
+          "perfil": { "type": "string" },
+          "anexos_bloqueados": { "type": "array", "items": { "type": "string" } },
+          "descripcion": { "type": "string" }
+        }
+      }
+    }
+  }
+}

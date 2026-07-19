@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Anexo1FichaTecnicaFASP",
+  "description": "Anexo 1 — Ficha técnica del FASP (Producto 1, generado por PY-1).",
+  "type": "object",
+  "required": ["id_ficha", "id_evaluacion", "nombre_programa", "fecha_elaboracion", "responsable"],
+  "properties": {
+    "id_ficha": { "type": "string", "pattern": "^[A-Z]{2,5}-[A-Z0-9-]+$" },
+    "id_evaluacion": { "type": "string" },
+    "nombre_programa": { "type": "string", "const": "Fondo de Aportaciones para la Seguridad Pública" },
+    "anio_fiscal": { "type": "integer", "minimum": 2008, "maximum": 2030 },
+    "rama": { "type": "string", "enum": ["Seguridad Pública"] },
+    "dependencia_coordinadora": { "type": "string" },
+    "fecha_elaboracion": { "type": "string", "format": "date" },
+    "responsable": { "type": "string" },
+    "marco_normativo_general": { "type": "array", "items": { "type": "string" } },
+    "objetivos_evaluacion": { "type": "array", "items": { "type": "string" } },
+    "alcance": { "type": "string", "enum": ["Federal", "Estatal", "Municipal", "Federal+Estatal", "Federal+Estatal+Municipal"] },
+    "metodologia": { "type": "string", "enum": ["Análisis normativo+ARS+triangulación"] }
+  }
+}

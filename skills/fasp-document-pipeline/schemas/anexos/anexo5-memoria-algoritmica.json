@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Anexo5MemoriaAlgoritmica",
+  "description": "Anexo 5 — Memoria algorítmica (Producto 2, generada por PY-3). Documenta algoritmos, parámetros, tratamiento de lazos no recíprocos y nodos aislados.",
+  "type": "object",
+  "required": ["secciones"],
+  "properties": {
+    "algoritmos_usados": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["nombre", "proposito"],
+        "properties": {
+          "nombre": { "type": "string" },
+          "version": { "type": "string" },
+          "proposito": { "type": "string" },
+          "parametros": { "type": "object" }
+        }
+      }
+    },
+    "tratamiento_lazos": {
+      "type": "string",
+      "enum": ["dirigidos", "no_dirigidos", "ponderados", "sin_ponderar"]
+    },
+    "tratamiento_nodos_aislados": {
+      "type": "string",
+      "description": "Cómo se manejaron nodos sin aristas (excluir, reportar, asignar arista nula)"
+    },
+    "escala_intensidad": {
+      "type": "object",
+      "description": "Escala usada para ponderar los lazos (ej. 0-10)."
+    },
+    "metricas_calculadas": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["centralidad_grado", "in_degree", "out_degree", "intermediacion", "cercania", "densidad", "modularidad", "diametro"]
+      }
+    },
+    "version_pipeline": { "type": "string" },
+    "fecha_calculo": { "type": "string", "format": "date-time" }
+  }
+}

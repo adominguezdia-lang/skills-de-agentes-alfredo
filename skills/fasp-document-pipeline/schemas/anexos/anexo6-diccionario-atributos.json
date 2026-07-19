@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Anexo6DiccionarioAtributos",
+  "description": "Anexo 6 — Diccionario de atributos de los nodos (Producto 2, generado por PY-3 + LLM-5).",
+  "type": "object",
+  "required": ["nodos"],
+  "properties": {
+    "nodos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id_actor", "nombre_oficial"],
+        "properties": {
+          "id_actor": { "type": "string" },
+          "nombre_oficial": { "type": "string" },
+          "nivel_gobierno": { "type": "string", "enum": ["Federal", "Estatal", "Municipal"] },
+          "entidad_federativa": { "type": "string" },
+          "naturaleza_juridica": { "type": "string" },
+          "rol_ciclo_fasp": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["Integración", "Distribución", "Administración", "Supervisión", "Seguimiento"] }
+          },
+          "frecuencia_participacion": { "type": "string" },
+          "tipo_participacion": { "type": "string" },
+          "mapeado_desde_fuente": { "type": "string" },
+          "confianza_identificacion": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    }
+  }
+}

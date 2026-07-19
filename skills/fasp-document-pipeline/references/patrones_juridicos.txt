@@ -1,0 +1,49 @@
+# Patrones regex para reconocer unidades normativas en textos jurídicos mexicanos.
+# Estos patrones alimentan a `scripts/llm-1-parser-juridico.py` y son extensibles.
+
+# === Artículos ===
+# Captura variantes: "Artículo 1°", "Art. 1", "ARTICULO 1", "Artículo 1 Bis", "Artículo 1° Ter"
+articulo_basico        = (?:Art(?:ículo|\.)?\s+)?(\d+(?:[º°])?(?:\s+(?:bis|ter|quater))?)\s*[\.:]?
+articulo_con_formato   = ^\s*(?:Art(?:ículo|\.)\s+)?(\d+(?:[º°])?(?:\s+(?:bis|ter|quater))?)\s*[\.:]?\s
+
+# === Fracciones ===
+# Captura: "I)", "II)", "a)", "b)" (romanos y letras)
+fraccion_romana       = ^\s*([IVX]+)\)\s+
+fraccion_letra        = ^\s*([a-z])\)\s+
+
+# === Incisos ===
+inciso                = ^\s*([a-z]\.|\d+\.)\s+
+
+# === Párrafos ===
+parrafo               = ^\s*Párrafo\s+(\d+)\s*[\.:]?\s
+
+# === Transitorios ===
+transitorio           = \b(?:TRANSITORIO(?:S)?|Art(?:ículo|\.)?\s+Transitorio)\b
+transitorio_n         = \bTRANSITORIO\s+(PRIMERO|SEGUNDO|TERCERO|CUARTO|QUINTO|SEXTO|S[ÉE]PTIMO|OCTAVO|NOVENO|D[ÉE]CIMO|UN[DÉ]CIMO|DUOD[ÉE]CIMO|[IVX]+)\b
+
+# === Niveles de gobierno (palabras clave) ===
+nivel_federal         = \b(Federal|C[ÁA]MARA\s+DE\s+DIPUTADOS|C[ÁA]MARA\s+DE\s+SENADORES|PRESIDENCIA\s+DE\s+LA\s+REP[ÚU]BLICA|DIARIO\s+OFICIAL\s+DE\s+LA\s+FEDERACI[ÓO]N)\b
+nivel_estatal         = \b(Estatal|GOBIERNO\s+DEL\s+ESTADO|CONGRESO\s+DEL\s+ESTADO|PERI[ÓO]DICO\s+OFICIAL\s+DEL\s+ESTADO)\b
+nivel_municipal       = \b(Municipal|Ayuntamiento|Gaceta\s+Municipal)\b
+
+# === Jerarquía normativa ===
+jerarquia             = \b(CONSTITUCI[ÓO]N|LEY\s+(?:GENERAL|FEDERAL|ORG[ÁA]NICA|ESTATAL)?|REGLAMENTO|C[ÓO]DIGO|DECRETO|ACUERDO|LINEAMIENTO|MANUAL|NOM[-\s]|NORMA\s+OFICIAL\s+MEXICANA|CONVENIO)\b
+
+# === Vigencia ===
+vigencia              = \b(?:VIGENTE|ABROGAD[OA]|DEROGAD[OA]|REFORMAD[OA]|VIGENCIA|A\s+PARTIR\s+DE|ENTRA\s+EN\s+VIGOR|FECHA\s+DE\s+PUBLICACI[ÓO]N)\b
+
+# === Uso en scripts Python ===
+# Para usar estos patrones desde Python:
+#
+#     import re
+#     patterns = {}
+#     with open(__file__) as f:
+#         for line in f:
+#             line = line.strip()
+#             if not line or line.startswith('#'):
+#                 continue
+#             if '=' in line and not line.startswith(' '):
+#                 name, _, pat = line.partition('=')
+#                 patterns[name.strip()] = pat.strip()
+#
+#     re.compile(patterns['articulo_basico'], re.IGNORECASE)

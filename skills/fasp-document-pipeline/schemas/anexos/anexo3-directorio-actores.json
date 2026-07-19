@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Anexo3DirectorioActores",
+  "description": "Anexo 3 — Directorio preliminar de actores (Producto 1, generado por LLM-3).",
+  "type": "object",
+  "required": ["actores"],
+  "properties": {
+    "actores": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id_actor", "nombre_oficial", "nivel_gobierno", "naturaleza", "funciones"],
+        "properties": {
+          "id_actor": { "type": "string", "pattern": "^ACT-[A-Z0-9-]+$" },
+          "nombre_oficial": { "type": "string" },
+          "nivel_gobierno": { "type": "string", "enum": ["Federal", "Estatal", "Municipal"] },
+          "entidad_federativa": { "type": "string" },
+          "naturaleza": { "type": "string", "enum": ["Formal", "Informal"] },
+          "funciones": { "type": "array", "items": { "type": "string" } },
+          "etapas_ciclo_participa": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["Integración", "Distribución", "Administración", "Supervisión", "Seguimiento"] }
+          },
+          "mapeado_a_id_norma": { "type": "array", "items": { "type": "string" } },
+          "alias_conocidos": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

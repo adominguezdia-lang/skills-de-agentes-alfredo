@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Anexo2MatrizCongruencia",
+  "description": "Anexo 2 — Matriz de congruencia normativa (Producto 1, generado por LLM-2).",
+  "type": "object",
+  "required": ["id_matriz", "filas"],
+  "properties": {
+    "id_matriz": { "type": "string" },
+    "id_norma_origen": { "type": "string" },
+    "filas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id_unidad", "id_norma", "articulo", "fraccion", "tema"],
+        "properties": {
+          "id_unidad": { "type": "string" },
+          "id_norma": { "type": "string" },
+          "nivel": { "type": "string", "enum": ["Federal", "Estatal", "Municipal"] },
+          "jerarquia": { "type": "string" },
+          "articulo": { "type": "string" },
+          "fraccion": { "type": "string" },
+          "tema": { "type": "string" },
+          "etapa_ciclo_fasp": {
+            "type": "string",
+            "enum": ["Integración", "Distribución", "Administración", "Supervisión", "Seguimiento"]
+          },
+          "dimension_ciclo": {
+            "type": "string",
+            "enum": ["Planeación", "Asignación", "Ejecución", "Seguimiento", "Rendición de cuentas"]
+          },
+          "tipo_competencia": {
+            "type": "string",
+            "enum": ["Exclusiva", "Concurrente", "Complementaria"]
+          },
+          "nivel_obligatoriedad": {
+            "type": "string",
+            "enum": ["Mandatoria", "Facultativa", "Recomendatoria"]
+          },
+          "referencia_coordinacion": { "type": "string" },
+          "duplicidad_detectada": { "type": "boolean" },
+          "contradiccion_detectada": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}
