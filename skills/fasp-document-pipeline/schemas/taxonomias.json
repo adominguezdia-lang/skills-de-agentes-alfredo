@@ -63,6 +63,35 @@
     "lineamiento",
     "transcripcion_entrevista",
     "transcripcion_grupo_enfoque",
-    "resumen_entrevista"
+    "resumen_entrevista",
+    "informe_institucional",
+    "articulo_academico",
+    "base_datos_publica",
+    "documento_interno"
+  ],
+  "entidades_federativas_clave": [
+    "MEX",
+    "CHI",
+    "MIC",
+    "TAM",
+    "HID",
+    "QRO",
+    "TAB",
+    "ZAC",
+    "NAL"
+  ],
+  "productos": ["P1", "P2", "P3", "IF"],
+  "tipos_archivo": ["INFORME", "MAT_ADY", "MAT_INC", "DIC_NODOS", "SCRIPT"],
+  "extensiones_validas": [
+    ".docx",
+    ".pdf",
+    ".csv",
+    ".xlsx",
+    ".py",
+    ".md",
+    ".txt",
+    ".html",
+    ".png",
+    ".json"
   ]
 }

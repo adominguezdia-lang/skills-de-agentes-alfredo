@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Anexo12FuentesInformacion",
+  "description": "Anexo 12 — Fuentes de informacion consultadas (Producto 3). Lista exhaustiva de fuentes documentales, de campo y secundarias.",
+  "type": "object",
+  "required": ["fuentes"],
+  "properties": {
+    "fuentes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id_fuente", "tipo", "titulo", "fecha_acceso"],
+        "properties": {
+          "id_fuente": { "type": "string", "pattern": "^FU-[0-9]+$" },
+          "tipo": {
+            "type": "string",
+            "enum": ["norma_federal", "norma_estatal", "norma_municipal",
+                     "convenio", "manual", "lineamiento", "informe_institucional",
+                     "transcripcion_entrevista", "transcripcion_grupo_enfoque",
+                     "articulo_academico", "base_datos_publica", "documento_interno"]
+          },
+          "titulo": { "type": "string" },
+          "autor_organismo": { "type": "string" },
+          "fecha_publicacion": { "type": "string", "format": "date" },
+          "fecha_acceso": { "type": "string", "format": "date" },
+          "url_publica": { "type": "string", "format": "uri" },
+          "entidad_federativa": {
+            "type": "string",
+            "enum": ["MEX", "CHI", "MIC", "TAM", "HID", "QRO", "TAB", "ZAC", "NAL", "Federal"]
+          },
+          "ruta_archivo_interno": { "type": "string" },
+          "transcripcion_entrevista_id": { "type": "string" }
+        }
+      }
+    }
+  }
+}

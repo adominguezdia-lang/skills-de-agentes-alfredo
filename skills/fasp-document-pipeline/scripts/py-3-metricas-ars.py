@@ -60,8 +60,15 @@ def calcular_metricas(G: nx.DiGraph) -> tuple[dict, dict]:
     # Diámetro y métricas de camino (solo si es débilmente conexo)
     if nx.is_weakly_connected(G):
         metricas_globales["diametro"] = nx.diameter(G.to_undirected())
+        # Distancia geodésica promedio (Plan de Trabajo FASP §V.G, Tabla 5)
+        try:
+            metricas_globales["distancia_geodesica_promedio"] = round(
+                nx.average_shortest_path_length(G.to_undirected()), 4)
+        except Exception:
+            metricas_globales["distancia_geodesica_promedio"] = None
     else:
         metricas_globales["diametro"] = None
+        metricas_globales["distancia_geodesica_promedio"] = None
 
     # Modularidad (Louvain, sobre la versión no-dirigida)
     try:
@@ -168,7 +175,7 @@ def generar_anexo5(db_path: pathlib.Path, output_dir: pathlib.Path,
         "metricas_calculadas": [
             "centralidad_grado", "in_degree", "out_degree",
             "intermediacion", "cercania", "densidad",
-            "modularidad", "diametro",
+            "modularidad", "diametro", "distancia_geodesica_promedio",
         ],
         "version_pipeline": schema_version,
         "fecha_calculo": datetime.now(timezone.utc).isoformat(),

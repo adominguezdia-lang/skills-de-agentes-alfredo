@@ -1,0 +1,68 @@
+{
+  "_comment": "Cronograma FASP 2026 (Plan de Trabajo, Tabla 1 y seccion VI.A). Fechas de entrega escalonadas por quincena.",
+  "marco": "Convenio Modificatorio",
+  "productos": {
+    "P1": {
+      "nombre": "Informe de Diagnostico del Marco Normativo, Funcional y de Actores Preliminares",
+      "entregables_totales": 8,
+      "fechas": {
+        "MEX": "1ra quincena de agosto 2026",
+        "HID": "1ra quincena de agosto 2026",
+        "MIC": "1ra quincena de agosto 2026",
+        "QRO": "1ra quincena de agosto 2026",
+        "CHI": "2da quincena de agosto 2026",
+        "TAB": "2da quincena de agosto 2026",
+        "TAM": "2da quincena de agosto 2026",
+        "ZAC": "2da quincena de agosto 2026"
+      }
+    },
+    "P2": {
+      "nombre": "Informe de Hallazgos de Campo y Grupos de Enfoque",
+      "entregables_totales": 8,
+      "fechas": {
+        "MEX": "1ra quincena de septiembre 2026",
+        "HID": "1ra quincena de septiembre 2026",
+        "MIC": "1ra quincena de septiembre 2026",
+        "QRO": "1ra quincena de septiembre 2026",
+        "CHI": "2da quincena de septiembre 2026",
+        "TAB": "2da quincena de septiembre 2026",
+        "TAM": "2da quincena de septiembre 2026",
+        "ZAC": "2da quincena de septiembre 2026"
+      }
+    },
+    "P3": {
+      "nombre": "Informe Final y Estrategia de Consolidacion del FASP",
+      "entregables_totales": 8,
+      "fechas": {
+        "MEX": "octubre-noviembre 2026",
+        "HID": "octubre-noviembre 2026",
+        "MIC": "octubre-noviembre 2026",
+        "QRO": "octubre-noviembre 2026",
+        "CHI": "octubre-noviembre 2026",
+        "TAB": "octubre-noviembre 2026",
+        "TAM": "octubre-noviembre 2026",
+        "ZAC": "octubre-noviembre 2026"
+      }
+    },
+    "IF": {
+      "nombre": "Informe Ejecutivo Global (consolidado nacional)",
+      "entregables_totales": 1,
+      "fechas": {
+        "NAL": "noviembre 2026"
+      }
+    }
+  },
+  "actividades_transversales": [
+    "Planeacion de la evaluacion. Taller interno de organizacion de los equipos",
+    "Reuniones de coordinacion mensuales con el SESNSP",
+    "Recepcion, revision y analisis de la informacion documental",
+    "Diseno y logistica del levantamiento de informacion primaria",
+    "Talleres internos para el analisis de hallazgos de campo",
+    "Taller interno para el diseno del analisis final",
+    "Elaboracion del Diagnostico de Riesgos de Coordinacion",
+    "Propuestas de reformas al marco normativo",
+    "Propuesta de redisenio de Logicas operativas",
+    "Taller interno: Diseno de Recomendaciones",
+    "Presentacion de resultados"
+  ]
+}

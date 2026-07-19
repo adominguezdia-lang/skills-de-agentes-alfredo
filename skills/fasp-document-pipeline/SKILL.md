@@ -171,35 +171,100 @@ Por defecto, el skill viene con **Opción A** (placeholders con prompts document
 - `sub-skills/llm-7-triangulador.md`
 - `sub-skills/llm-8-fichas-hallazgos.md`
 - `sub-skills/llm-9-informe-final.md`
+- `scripts/llm-1-parser-juridico.py` — Parser jurídico (FUNCIONAL)
+- `scripts/nomenclatura.py` — Validación y construcción de nombres FASP_2026_* (FUNCIONAL)
 - `scripts/py-1-estructuracion.py` — ID únicos + Ficha técnica FASP (FUNCIONAL)
-- `scripts/py-2-matrices-red.py` — Constructor matrices ARS (funcional)
-- `scripts/py-3-metricas-ars.py` — Métricas ARS + memoria algorítmica (funcional)
-- `scripts/py-4-exportacion.py` — Exportación + replicabilidad (funcional)
+- `scripts/py-2-matrices-red.py` — Constructor matrices ARS (FUNCIONAL)
+- `scripts/py-3-metricas-ars.py` — Métricas ARS + memoria algorítmica (FUNCIONAL)
+- `scripts/py-3-sociograma.py` — Sociograma con 3 criterios topológicos (FUNCIONAL)
+- `scripts/py-4-exportacion.py` — Exportación + replicabilidad (FUNCIONAL)
 - `scripts/db_init.py` — Crea BD SQLite con esquema para los 12 anexos.
 - `scripts/checkpoint.py` — Registra aprobaciones por perfil y etapa.
-- `schemas/anexos/*.json` — Esquemas JSON de cada uno de los 12 anexos.
-- `schemas/taxonomias.json` — Las 5 taxonomías cerradas del FASP.
+- `scripts/validate_taxonomias.py` — Verifica que valores pertenezcan a taxonomías cerradas.
+- `schemas/anexos/*.json` — Esquemas JSON de 9 de los 12 anexos (1, 2, 3, 4, 5, 6, 10, 11, 12).
+- `schemas/taxonomias.json` — Las 7 taxonomías cerradas (incluye entidades federativas y nomenclatura).
 - `schemas/checkpoints.json` — Perfiles y gates humanos.
-- `references/catalogo_unidades_administrativas.txt` — ≥60 unidades federales/estatales con atribuciones FASP.
+- `references/catalogo_unidades_administrativas.txt` — ~60 unidades federales/estatales con atribuciones FASP.
 - `references/patrones_juridicos.txt` — Regex para artículos, fracciones, transitorios.
-- `tests/test_smoke.py` — Verifica BD, taxonomías, schemas.
+- `references/entidades_federativas.json` — Las 8 entidades evaluables + NAL (Plan de Trabajo FASP 2026).
+- `references/equipo_cevalua.json` — Los 14 integrantes del equipo C-evalua.
+- `references/cronograma.json` — Fechas de entrega escalonadas por quincena.
+- `references/memoria_codificacion.json` — Escala de intensidad (0-10) y 3 criterios de visualización.
+- `tests/test_smoke.py` — 12 tests: BD, taxonomías, schemas, nomenclatura, sociograma end-to-end.
 
-## Estado de implementación (v1.0)
+## Estado de implementación (v1.1 — acoplado al Plan de Trabajo FASP 2026)
 
 | Componente | Estado |
 |---|---|
 | `pdf-to-knowledge-graph` (sub-componente Etapa 1) | ✅ Funcional (reusado) |
 | BD SQLite con esquema para 12 anexos | ✅ Funcional |
-| Taxonomías cerradas (5 vocabularios) | ✅ Funcional (validables) |
-| LLM-1 Parser jurídico | ✅ Funcional (módulo CLI con regex) |
-| LLM-2 a LLM-9 | 📋 Documentados con prompts (placeholders activables) |
+| Taxonomías cerradas (5 vocabularios + entidades federativas) | ✅ Funcional (validables) |
+| Nomenclatura obligatoria `FASP_2026_<PRODUCTO>_<EDO>_<TIPO>_V<X>.<EXT>` | ✅ Funcional (scripts/nomenclatura.py) |
+| Referencias del Plan de Trabajo (entidades, equipo, cronograma, memoria) | ✅ 4 archivos JSON en references/ |
+| LLM-1 Parser jurídico | ✅ Funcional (regex + keywords) |
+| LLM-2 a LLM-9 | 📋 Prompts documentados (placeholders activables) |
 | PY-1 Estructuración (Anexo 1) | ✅ Funcional |
-| PY-2 Constructor matrices ARS | ✅ Funcional (esquema CSV) |
-| PY-3 Métricas ARS | ✅ Funcional (cálculo + memoria) |
-| PY-4 Exportación | ✅ Funcional (formatos abiertos) |
+| PY-2 Constructor matrices ARS | ✅ Funcional |
+| PY-3 Métricas ARS (8 + geodesica_promedio) | ✅ Funcional |
+| PY-3-sociograma con 3 criterios formales del Plan | ✅ Funcional |
+| PY-4 Exportación | ✅ Funcional |
 | Checkpoints humanos (5 perfiles × 3 etapas) | ✅ Funcional |
-| Catálogo de unidades administrativas | 📋 Base inicial (~60 entradas), extensible |
+| Catálogo de unidades administrativas | 📋 Base inicial (~60), extensible |
 | Detección patrones jurídicos | ✅ Funcional (regex) |
+| Schemas para Anexos 1-12 | ✅ 9 schemas JSON (1, 2, 3, 4, 5, 6, 10, 11, 12) |
+
+## Acoplamiento al Plan de Trabajo FASP 2026
+
+### Entidades federativas a evaluar (8 + NAL)
+
+| Clave | Estado | Senior responsable P1 |
+|---|---|---|
+| MEX | Estado de México | Jaqueline Meza Urías |
+| HID | Hidalgo | Diana Valadez Rovelo |
+| MIC | Michoacán de Ocampo | Jerónimo Hernández Hernández |
+| QRO | Querétaro | Nancy García Vázquez |
+| CHI | Chiapas | Diana Valadez Rovelo |
+| TAB | Tabasco | Jerónimo Hernández Hernández |
+| TAM | Tamaulipas | Jaqueline Meza Urías |
+| ZAC | Zacatecas | Nancy García Vázquez |
+| NAL | Agregación Nacional | — (consolidación) |
+
+### Nomenclatura de archivos (Plan §V.H, Tabla 6)
+
+Todo archivo generado debe seguir:
+
+```
+[PROGRAMA]_[PRODUCTO]_[EDO]_[TIPO_ARCHIVO]_V[X].[EXT]
+
+FASP_2026_P3_MEX_INFORME_V1.0.docx       # Informe estatal
+FASP_2026_P3_CHI_MAT_ADY_V1.0.csv        # Matriz adyacencia
+FASP_2026_P3_MIC_MAT_INC_V1.0.xlsx       # Matriz incidencia
+FASP_2026_P3_TAM_DIC_NODOS_V1.0.csv      # Diccionario de nodos
+FASP_2026_P3_QRO_SCRIPT_V1.0.py         # Script Python
+FASP_2026_IF_NAL_BBDD_V2.0.xlsx         # Base consolidada nacional
+```
+
+Ver `scripts/nomenclatura.py` para validación y construcción programática.
+
+### Criterios formales de visualización del sociograma (Plan §V.G, Tabla 5)
+
+| Atributo | Mapeo |
+|---|---|
+| Tamaño del nodo | ∝ Betweenness (centralidad de intermediación) |
+| Color del nodo | Federal `#1a4480` / Estatal `#7a3e9d` / Municipal `#b5651d` |
+| Grosor de aristas | ∝ Peso del vínculo (frecuencia + intensidad) |
+
+El script `scripts/py-3-sociograma.py` aplica estos 3 criterios automáticamente.
+
+### Equipo C-evalua (14 personas)
+
+| Rol | Personas |
+|---|---|
+| Coordinadora | Janett Salvador Martínez (100%) |
+| Analista Senior Redes | Alfredo Domínguez Díaz (100%) ← este script es tu entregable |
+| Analistas Senior | Diana Valadez, Jaqueline Meza, Jerónimo Hernández, Nancy García (80% c/u) |
+| Analistas Junior Redes | Paulina González, Nancy Morales, Erick Navarro, Sheila Morales (80% c/u) |
+| Analistas Junior Cuali | Edgar Martínez, Arturo Torres, Anabelle García, Macarena Orozco (60% c/u) |
 
 ## Licencia
 

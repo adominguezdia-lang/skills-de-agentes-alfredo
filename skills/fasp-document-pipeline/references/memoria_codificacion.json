@@ -1,0 +1,55 @@
+{
+  "_comment": "Memoria de Codificacion FASP 2026 (Plan de Trabajo, secciones IV.C y V.G). Define la escala de intensidad (peso) de los lazos y los criterios de visualizacion del sociograma.",
+  "escala_intensidad": {
+    "rango": "0-10",
+    "definicion_corta": "0=sin interaccion, 10=coordinacion diaria formalizada",
+    "fuente_datos": [
+      "Frecuencia de la interaccion (diaria/semanal/mensual/trimestral/ocasional)",
+      "Intensidad declarada por el actor entrevistado",
+      "Peso dado por el equipo de campo segun protocolo"
+    ],
+    "puntuacion_recomendada": {
+      "0": "Sin interaccion documentada",
+      "1-2": "Ocasional, sin continuidad",
+      "3-4": "Trimestral, de baja intensidad",
+      "5-6": "Mensual, con productos concretos",
+      "7-8": "Semanal, con reuniones formales",
+      "9-10": "Diaria o semanal multiple, con coordinacion formalizada"
+    }
+  },
+  "tipos_vinculo": {
+    "Formal": "Relaciones establecidas por norma, reglamento, convenio o acuerdo",
+    "Informal": "Coordinacion que ocurre en la practica sin sustento normativo explicito",
+    "Jerarquico": "Relacion de subordinacion (mando superior a subordinado)",
+    "Operativo": "Coordinacion para ejecutar acciones conjuntas",
+    "Consultivo": "Relacion de asesoria o consulta tecnica"
+  },
+  "frecuencias_reconocidas": ["diaria", "semanal", "mensual", "trimestral", "ocasional"],
+  "canales_reconocidos": ["oficial", "informal", "electronico", "presencial", "mixto"],
+  "criterios_visualizacion_sociograma": {
+    "tamano_nodo": {
+      "variable_mapeada": "Betweenness (centralidad de intermediacion)",
+      "tipo_relacion": "directamente_proporcional",
+      "comentario": "A mayor control sobre los flujos de coordinacion, volumen superior en el espacio topologico."
+    },
+    "color_nodo": {
+      "variable_mapeada": "Nivel de gobierno (Federal/Estatal/Municipal)",
+      "tipo_relacion": "categorico",
+      "paleta_recomendada": {
+        "Federal": "#1a4480 (azul)",
+        "Estatal": "#7a3e9d (morado)",
+        "Municipal": "#b5651d (naranja)"
+      }
+    },
+    "grosor_arista": {
+      "variable_mapeada": "Peso del vinculo (weight)",
+      "tipo_relacion": "directamente_proporcional",
+      "comentario": "Canales de comunicacion continua y estrategica con mayor espesor."
+    }
+  },
+  "validacion_metricas": {
+    "min_nodos_para_centralidad": ">= 3 (debajo de eso, las centralidades son triviales)",
+    "min_nodos_para_louvain": ">= 5 (debajo de eso, las comunidades son artefacto)",
+    "advertencia_corpus_pequeno": "<5 nodos o <10 aristas"
+  }
+}

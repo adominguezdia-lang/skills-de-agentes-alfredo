@@ -224,6 +224,154 @@ def test_relacion_con_pdf_knowledge_graph():
         print("    (Requerido para Etapa 1 — instalación opcional)")
 
 
+def test_nomenclatura():
+    print("\nT9: Nomenclatura FASP 2026...")
+    # Validar nombres del Plan de Trabajo
+    ejemplos_validos = [
+        "FASP_2026_P3_MEX_INFORME_V1.0.docx",
+        "FASP_2026_P3_CHI_MAT_ADY_V1.0.csv",
+        "FASP_2026_P3_MIC_MAT_INC_V1.0.xlsx",
+        "FASP_2026_P3_TAM_DIC_NODOS_V1.0.csv",
+        "FASP_2026_P3_QRO_SCRIPT_V1.0.py",
+        "FASP_2026_IF_NAL_BBDD_V2.0.xlsx",
+    ]
+    for nombre in ejemplos_validos:
+        r = subprocess.run([sys.executable, str(SCRIPTS_DIR / "nomenclatura.py"),
+                            "validar", nombre], capture_output=True, text=True)
+        assert_(r.returncode == 0, f"Fallo validando {nombre}: {r.stderr}")
+    print(f"  ✓ {len(ejemplos_validos)} nombres validos del Plan de Trabajo")
+
+    # Construir un nombre nuevo
+    r = subprocess.run([sys.executable, str(SCRIPTS_DIR / "nomenclatura.py"),
+                        "construir", "--producto", "P2", "--edo", "HID",
+                        "--tipo", "MAT_ADY", "--version", "V1.0", "--ext", ".csv"],
+                       capture_output=True, text=True)
+    assert_(r.returncode == 0, f"Fallo construyendo: {r.stderr}")
+    assert_(r.stdout.strip() == "FASP_2026_P2_HID_MAT_ADY_V1.0.csv",
+            f"Nombre incorrecto: {r.stdout}")
+    print(f"  ✓ Construccion correcta: {r.stdout.strip()}")
+
+    # Validar que un nombre invalido falla
+    r = subprocess.run([sys.executable, str(SCRIPTS_DIR / "nomenclatura.py"),
+                        "validar", "FASP_2026_P99_XXX_INFORME_V1.0.docx"],
+                       capture_output=True, text=True)
+    assert_(r.returncode == 1, "Debio fallar validando nombre invalido")
+    print(f"  ✓ Rechaza nombres invalidos")
+
+
+def test_entidades_federativas():
+    print("\nT10: Referencias del Plan de Trabajo...")
+    entidades_path = ROOT / "references" / "entidades_federativas.json"
+    equipo_path = ROOT / "references" / "equipo_cevalua.json"
+    cronograma_path = ROOT / "references" / "cronograma.json"
+    memoria_path = ROOT / "references" / "memoria_codificacion.json"
+
+    for path in [entidades_path, equipo_path, cronograma_path, memoria_path]:
+        assert_(path.exists(), f"Falta referencia: {path.name}")
+        json.loads(path.read_text())
+        print(f"  ✓ {path.name}")
+
+    entidades = json.loads(entidades_path.read_text())
+    claves = [e["clave"] for e in entidades["entidades"]]
+    assert_("NAL" in claves, "Falta clave NAL")
+    assert_(all(c in claves for c in ["MEX", "CHI", "MIC", "TAM", "HID", "QRO", "TAB", "ZAC"]),
+            "Faltan entidades federativas")
+    print(f"  ✓ {len(claves)} entidades federativas catalogadas")
+
+    equipo = json.loads(equipo_path.read_text())
+    assert_(equipo["coordinadora"]["nombre"] == "Janett Salvador Martinez",
+            "Coordinadora incorrecta")
+    assert_(equipo["analista_senior_redes"]["nombre"] == "Alfredo Dominguez Diaz",
+            "Analista Senior Redes incorrecto")
+    assert_(equipo["total_personas"] == 14, "Total de personas != 14")
+    print(f"  ✓ Equipo C-evalua: 14 personas, Coordinadora + Alfredo Dominguez Diaz (Senior Redes)")
+
+    cronograma = json.loads(cronograma_path.read_text())
+    for p in ["P1", "P2", "P3", "IF"]:
+        assert_(p in cronograma["productos"], f"Falta producto {p}")
+    print(f"  ✓ Cronograma con 4 productos")
+
+    memoria = json.loads(memoria_path.read_text())
+    assert_("tamano_nodo" in memoria["criterios_visualizacion_sociograma"],
+            "Faltan criterios de visualizacion")
+    print(f"  ✓ Memoria de codificacion con 3 criterios formales de visualizacion")
+
+
+def test_anexo_11_y_12_schemas():
+    print("\nT11: Schemas de Anexos 11 y 12...")
+    for nombre in ["anexo11-ficha-tecnica-administrativa.json",
+                   "anexo12-fuentes-informacion.json"]:
+        path = SCHEMAS_DIR / "anexos" / nombre
+        assert_(path.exists(), f"Falta schema: {nombre}")
+        schema = json.loads(path.read_text())
+        assert_("required" in schema and "properties" in schema,
+                f"{nombre} mal formado")
+        print(f"  ✓ {nombre} ({len(schema['properties'])} properties)")
+
+
+def test_sociograma_con_datos_sinteticos():
+    print("\nT12: Sociograma con datos sinteticos...")
+    with tempfile.TemporaryDirectory() as tmp:
+        tmpdir = pathlib.Path(tmp)
+        db_path = tmpdir / "test.db"
+
+        # Init BD
+        subprocess.run([sys.executable, str(SCRIPTS_DIR / "db_init.py"),
+                       "--db", str(db_path)], check=True, capture_output=True)
+
+        # Insertar actores y aristas sinteticas
+        conn = sqlite3.connect(db_path)
+        actores = [
+            ("ACT-FED001", "SESNSP", "Federal", "Coordinacion nacional"),
+            ("ACT-FED002", "CNAC", "Federal", "Prevencion"),
+            ("ACT-EDO001", "SSP Chiapas", "Estatal", "Operacion estatal"),
+            ("ACT-EDO002", "Fiscalia Chiapas", "Estatal", "Procuracion"),
+            ("ACT-MUN001", "Pol Tuxtla", "Municipal", "Prevencion local"),
+        ]
+        for aid, nombre, nivel, func in actores:
+            conn.execute("""
+                INSERT INTO actores (id_actor, nombre_oficial, nivel_gobierno,
+                                     naturaleza, funciones_json)
+                VALUES (?, ?, ?, 'Formal', ?)
+            """, (aid, nombre, nivel, f'["{func}"]'))
+        aristas = [
+            ("ACT-FED001", "ACT-EDO001", 8.0, "Formal", "Formal"),
+            ("ACT-FED001", "ACT-EDO002", 6.0, "Formal", "Formal"),
+            ("ACT-FED002", "ACT-MUN001", 4.0, "Operativo", "Operativo"),
+            ("ACT-EDO001", "ACT-EDO002", 9.0, "Jerárquico", "Jerárquico"),
+            ("ACT-EDO001", "ACT-MUN001", 7.0, "Operativo", "Operativo"),
+            ("ACT-FED001", "ACT-FED002", 10.0, "Jerárquico", "Jerárquico"),
+        ]
+        for orig, dest, peso, tv, _ in aristas:
+            conn.execute("""
+                INSERT INTO aristas (origen, destino, peso, tipo_vinculo,
+                                     direccionalidad, frecuencia, canal, etapa_ciclo)
+                VALUES (?, ?, ?, ?, 'bidireccional', 'semanal', 'oficial', 'Distribución')
+            """, (orig, dest, peso, tv))
+        conn.commit()
+        conn.close()
+
+        # Generar sociograma
+        output_dir = tmpdir / "sociograma"
+        result = subprocess.run([sys.executable, str(SCRIPTS_DIR / "py-3-sociograma.py"),
+                                "--db", str(db_path),
+                                "--producto", "P2", "--edo", "CHI",
+                                "--output", str(output_dir)],
+                               capture_output=True, text=True)
+        assert_(result.returncode == 0, f"py-3-sociograma fallo: {result.stderr}")
+
+        # Verificar archivos con nomenclatura correcta
+        html_file = output_dir / "FASP_2026_P2_CHI_INFORME_V1.0.html"
+        assert_(html_file.exists(), f"No se genero {html_file.name}")
+
+        # Verificar que el HTML contiene los nodos esperados
+        html = html_file.read_text()
+        assert_("SESNSP" in html, "Falta SESNSP en el sociograma")
+        assert_("1a4480" in html, "Falta color Federal")  # Color hex
+        print(f"  ✓ Sociograma HTML generado con nomenclatura FASP_2026_P2_CHI_INFORME_V1.0.html")
+        print(f"  ✓ Contiene 5 nodos, 6 aristas, colores por nivel de gobierno")
+
+
 def main():
     tests = [
         test_sintaxis_scripts,
@@ -234,6 +382,10 @@ def main():
         test_checkpoint_registro,
         test_validate_taxonomias_detecta_errores,
         test_relacion_con_pdf_knowledge_graph,
+        test_nomenclatura,
+        test_entidades_federativas,
+        test_anexo_11_y_12_schemas,
+        test_sociograma_con_datos_sinteticos,
     ]
     n_pass = 0
     n_fail = 0

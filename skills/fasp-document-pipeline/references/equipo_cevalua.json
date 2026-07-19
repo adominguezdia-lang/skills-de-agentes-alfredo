@@ -1,0 +1,65 @@
+{
+  "_comment": "Equipo de C-evalua para la Evaluacion Estrategica de Coordinacion al FASP 2026. Asignacion de estados por Analista Senior (Producto 1: 2 estados por Senior). Fuente: Plan de Trabajo, Tabla 9 y Tablas de organizacion.",
+  "instancia_evaluadora": "Centro de Analisis de Programas y Evaluacion de Proyectos, S.C. (C-evalua)",
+  "cliente": "Secretariado Ejecutivo del Sistema Nacional de Seguridad Publica (SESNSP)",
+  "coordinadora": {
+    "nombre": "Janett Salvador Martinez",
+    "rol": "Coordinadora de la Evaluacion",
+    "dedicacion": "100% exclusiva"
+  },
+  "analista_senior_redes": {
+    "nombre": "Alfredo Dominguez Diaz",
+    "rol": "Analista Senior experto en Analisis de Redes y Teoria de Grafos",
+    "dedicacion": "100% exclusivo",
+    "responsabilidades": [
+      "Diseno del modelo relacional y cuestionarios sociocentricos",
+      "Procesamiento de datos automatizado",
+      "Analisis cuantitativo de redes (centralidad, densidad, conectividad)",
+      "Visualizacion de resultados (sociogramas con criterios topologicos)",
+      "Participacion en Productos 2 y 3"
+    ]
+  },
+  "analistas_senior": [
+    {
+      "nombre": "Diana Valadez Rovelo",
+      "estados_producto_1": ["Hidalgo", "Chiapas"],
+      "codigos": ["HID", "CHI"],
+      "dedicacion": "80%",
+      "junior_cuali_asignado": "Anabelle Garcia Espinosa"
+    },
+    {
+      "nombre": "Jaqueline Meza Urias",
+      "estados_producto_1": ["Estado de Mexico", "Tamaulipas"],
+      "codigos": ["MEX", "TAM"],
+      "dedicacion": "80%",
+      "junior_cuali_asignado": "Edgar Adolfo Martinez Mendoza"
+    },
+    {
+      "nombre": "Jeronimo Hernandez Hernandez",
+      "estados_producto_1": ["Michoacan de Ocampo", "Tabasco"],
+      "codigos": ["MIC", "TAB"],
+      "dedicacion": "80%",
+      "junior_cuali_asignado": "Arturo Doroteo Torres Verdin"
+    },
+    {
+      "nombre": "Nancy Garcia Vazquez",
+      "estados_producto_1": ["Queretaro", "Zacatecas"],
+      "codigos": ["QRO", "ZAC"],
+      "dedicacion": "80%",
+      "junior_cuali_asignado": "Macarena Orozco Martinez"
+    }
+  ],
+  "analistas_junior_redes": [
+    { "nombre": "Ana Paulina Gonzalez Arroyo", "dedicacion": "80%" },
+    { "nombre": "Nancy Miriam Morales Rodriguez", "dedicacion": "80%" },
+    { "nombre": "Erick Alberto Navarro Esparza", "dedicacion": "80%" },
+    { "nombre": "Sheila Prisila Morales Velasco", "dedicacion": "80%" }
+  ],
+  "analistas_junior_cuali": [
+    { "nombre": "Anabelle Garcia Espinosa", "dedicacion": "60%" },
+    { "nombre": "Edgar Adolfo Martinez Mendoza", "dedicacion": "60%" },
+    { "nombre": "Arturo Doroteo Torres Verdin", "dedicacion": "60%" },
+    { "nombre": "Macarena Orozco Martinez", "dedicacion": "60%" }
+  ],
+  "total_personas": 14
+}

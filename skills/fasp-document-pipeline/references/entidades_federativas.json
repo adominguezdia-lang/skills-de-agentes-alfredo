@@ -1,0 +1,59 @@
+{
+  "_comment": "Las 8 entidades federativas a evaluar (Plan de Trabajo FASP 2026 §II.C). La clave NAL se usa exclusivamente para documentos de agregacion o sintesis nacional.",
+  "entidades": [
+    {
+      "clave": "MEX",
+      "estado": "Estado de Mexico",
+      "oficial": "Estados Unidos Mexicanos, Estado de Mexico",
+      "region": "Centro"
+    },
+    {
+      "clave": "CHI",
+      "estado": "Chiapas",
+      "oficial": "Estados Unidos Mexicanos, Chiapas",
+      "region": "Sur-Sureste"
+    },
+    {
+      "clave": "MIC",
+      "estado": "Michoacan de Ocampo",
+      "oficial": "Estados Unidos Mexicanos, Michoacan de Ocampo",
+      "region": "Centro-Occidente"
+    },
+    {
+      "clave": "TAM",
+      "estado": "Tamaulipas",
+      "oficial": "Estados Unidos Mexicanos, Tamaulipas",
+      "region": "Noreste"
+    },
+    {
+      "clave": "HID",
+      "estado": "Hidalgo",
+      "oficial": "Estados Unidos Mexicanos, Hidalgo",
+      "region": "Centro"
+    },
+    {
+      "clave": "QRO",
+      "estado": "Queretaro",
+      "oficial": "Estados Unidos Mexicanos, Queretaro",
+      "region": "Centro"
+    },
+    {
+      "clave": "TAB",
+      "estado": "Tabasco",
+      "oficial": "Estados Unidos Mexicanos, Tabasco",
+      "region": "Sur-Sureste"
+    },
+    {
+      "clave": "ZAC",
+      "estado": "Zacatecas",
+      "oficial": "Estados Unidos Mexicanos, Zacatecas",
+      "region": "Centro-Norte"
+    },
+    {
+      "clave": "NAL",
+      "estado": "Agregacion Nacional",
+      "oficial": "Documentos de sintesis o agregacion nacional",
+      "region": "Nacional"
+    }
+  ]
+}

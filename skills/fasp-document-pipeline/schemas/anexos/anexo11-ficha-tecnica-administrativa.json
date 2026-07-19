@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Anexo11FichaTecnicaAdministrativa",
+  "description": "Anexo 11 — Ficha tecnica administrativa (Producto 3). Documenta la estructura organizativa de los procesos administrativos del FASP evaluados.",
+  "type": "object",
+  "required": ["id_ficha", "entidad_federativa", "procesos_administrativos"],
+  "properties": {
+    "id_ficha": { "type": "string", "pattern": "^FASP-2026-(P3|IF)-[A-Z]{3}-[A-Z0-9-]+$" },
+    "entidad_federativa": {
+      "type": "string",
+      "enum": ["MEX", "CHI", "MIC", "TAM", "HID", "QRO", "TAB", "ZAC", "NAL"]
+    },
+    "nombre_estado": {
+      "type": "string",
+      "enum": ["Estado de Mexico", "Chiapas", "Michoacan de Ocampo", "Tamaulipas",
+               "Hidalgo", "Queretaro", "Tabasco", "Zacatecas", "Agregacion Nacional"]
+    },
+    "procesos_administrativos": {
+      "type": "array",
+      "description": "Procesos administrativos del FASP evaluados en la entidad.",
+      "items": {
+        "type": "object",
+        "required": ["id_proceso", "nombre", "etapa_ciclo_fasp", "responsable"],
+        "properties": {
+          "id_proceso": { "type": "string", "pattern": "^PROC-[A-Z0-9-]+$" },
+          "nombre": { "type": "string" },
+          "etapa_ciclo_fasp": {
+            "type": "string",
+            "enum": ["Integracion", "Distribucion", "Administracion", "Supervision", "Seguimiento"]
+          },
+          "responsable": { "type": "string", "description": "id_actor del responsable" },
+          "plazos": { "type": "string", "description": "Plazos formales segun normativa" },
+          "medios_ejecucion": { "type": "string", "description": "Medios formales (oficios, SIIP, etc.)" },
+          "estado_actual": { "type": "string", "enum": ["operativo", "parcial", "no_operativo"] }
+        }
+      }
+    },
+    "observaciones": { "type": "string" },
+    "fecha_elaboracion": { "type": "string", "format": "date" },
+    "responsable_elaboracion": { "type": "string" }
+  }
+}
