@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """
-checkpoint.py — Registra aprobaciones humanas por perfil y etapa.
+checkpoint.py — Registra gates de control por etapa del pipeline FASP.
+
+Los gates son metadata de trazabilidad del avance por etapa y perfil.
+El campo aprobador es texto libre — NO se valida identidad.
+Alfredo Dominguez Diaz coordina el stack completo.
 
 Uso:
-    # Registrar un checkpoint:
+    # Registrar un gate:
     python3 checkpoint.py --db ./fasp.db --etapa etapa_1_documental \\
         --perfil coordinadora --anexo "Anexo 2" --doc-id NOR-ABC123 \\
-        --decision aprobado --aprobador "María López"
+        --decision aprobado --aprobador "Alfredo Dominguez"
 
-    # Listar checkpoints pendientes:
+    # Listar gates pendientes:
     python3 checkpoint.py --db ./fasp.db --listar pendientes
 
-    # Listar todos los checkpoints:
+    # Listar todos los gates:
     python3 checkpoint.py --db ./fasp.db --listar todos
 """
 from __future__ import annotations
@@ -21,15 +25,25 @@ from datetime import datetime, timezone
 
 PERFILES_POR_ETAPA = {
     "etapa_1_documental": [
-        ("coordinadora", "Revisión general de la Ficha técnica FASP y coherencia global"),
-        ("analista_senior_juridico", "Revisión de la matriz de congruencia y directorio preliminar"),
+        ("coordinadora", "Avance general de la Ficha tecnica FASP y coherencia global"),
+        ("analista_senior_juridico", "Avance de la matriz de congruencia y directorio preliminar"),
+        ("coordinacion_evaluacion", "Avance de la narracion de los Informes 1 (8 estados)"),
+        ("coordinadora", "Avance de la Ficha tecnica administrativa (Anexo 11)"),
+        ("analista_senior_juridico", "Avance del Catalogo de unidades administrativas"),
     ],
     "etapa_2_campo_ars": [
-        ("analista_senior_redes", "Validación de edge list, matrices y métricas ARS"),
-        ("analistas_junior_grafos", "Verificación de nodos, aristas y clasificación de relaciones"),
+        ("coordinadora", "Avance del Producto 2 (Hallazgos de Campo + Grupos de Enfoque)"),
+        ("analista_senior_redes", "Avance de edge list, matrices y metricas ARS"),
+        ("analistas_junior_grafos", "Avance de nodos, aristas y clasificacion de relaciones"),
+        ("analista_senior_redes", "Avance de la memoria algoritmica (Anexo 5)"),
+        ("analistas_junior_grafos", "Avance del Diccionario de atributos (Anexo 6)"),
     ],
     "etapa_3_triangulacion": [
-        ("coordinacion_evaluacion", "Validación de narrativas, diagnósticos y recomendaciones"),
+        ("coordinadora", "Avance de triangulaciones y ajustes de recomendaciones"),
+        ("coordinacion_evaluacion", "Avance del Informe Final y Estrategia de Consolidacion"),
+        ("coordinacion_evaluacion", "Avance de las fichas del Anexo 10"),
+        ("coordinadora", "Avance del Glosario especializado (Anexo 7)"),
+        ("coordinacion_evaluacion", "Avance de la Metodologia de replicabilidad (Anexo 8)"),
     ],
 }
 

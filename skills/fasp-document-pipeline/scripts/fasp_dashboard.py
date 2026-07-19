@@ -353,14 +353,14 @@ h1{{color:#a00}}</style></head>
         elif tab == "etapa_2":
             return [
                 ("Aristas ARS", m['aristas']),
-                ("Checkpoints Etapa 2 firmados",
+                ("Gates Etapa 2 registrados",
                  sum(1 for e, p in data["gates"] if e == "etapa_2_campo_ars"
                      and data["gates"][(e, p)] and data["gates"][(e, p)]["decision"] == "aprobado")),
             ]
         elif tab == "etapa_3":
             return [
                 ("Fichas de hallazgos (Anexo 10)", m['fichas']),
-                ("Checkpoints Etapa 3 firmados",
+                ("Gates Etapa 3 registrados",
                  sum(1 for e, p in data["gates"] if e == "etapa_3_triangulacion"
                      and data["gates"][(e, p)] and data["gates"][(e, p)]["decision"] == "aprobado")),
             ]
@@ -377,7 +377,7 @@ h1{{color:#a00}}</style></head>
                 <div class="card"><div class="label">Unidades normativas</div><div class="value">{m['unidades']}</div></div>
                 <div class="card"><div class="label">Actores en directorio</div><div class="value">{m['actores']}</div></div>
                 <div class="card"><div class="label">Aristas ARS</div><div class="value">{m['aristas']}</div></div>
-                <div class="card"><div class="label">Checkpoints firmados</div>
+                <div class="card"><div class="label">Gates registrados</div>
                     <div class="value" style="color:#10b981">{ok}/{total}</div></div>
                 <div class="card"><div class="label">Fichas de hallazgos</div><div class="value">{m['fichas']}</div></div>
             </div>
@@ -419,7 +419,7 @@ h1{{color:#a00}}</style></head>
             </div>
             <div class="grid">{stats_html}</div>
             <div class="section">
-                <h2>Gates de aprobacion humana ({ok}/{total} firmados)</h2>
+                <h2>Gates de control registrados ({ok}/{total})</h2>
                 {gates_html}
             </div>
         </div>
@@ -465,7 +465,7 @@ h1{{color:#a00}}</style></head>
         <span><b>Generado:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</span>
     </div>
     <div class="progress-global">
-        <div class="label">Avance global del pipeline: {avance_total} de 15 gates firmados</div>
+        <div class="label">Avance global del pipeline: {avance_total} de 15 gates registrados</div>
         <div class="bar"><div class="fill" style="width: {int(avance_total/15*100)}%"></div></div>
     </div>
 </div>
