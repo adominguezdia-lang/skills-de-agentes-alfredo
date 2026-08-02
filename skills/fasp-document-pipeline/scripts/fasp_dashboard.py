@@ -7,7 +7,7 @@ El tab Resumen muestra la lista de normas/conversiones con sus parametros
 y metricas de calidad (reemplaza la antigua vista de gates).
 """
 from __future__ import annotations
-import argparse, json, pathlib, re, sys, unicodedata
+import argparse, json, pathlib, re, sys, time, unicodedata
 from collections import Counter
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -82,6 +82,7 @@ ETAPAS_TABS = [
     ("etapa_1", "Etapa 1: Documental"),
     ("etapa_2", "Etapa 2: Campo + ARS"),
     ("etapa_3", "Etapa 3: Triangulacion"),
+    ("ayuda", "Ayuda del proceso"),
 ]
 
 
@@ -550,6 +551,9 @@ h1{{color:#a00}}</style></head>
     tab_etapa_3 = tab_etapa("etapa_3", "Etapa 3: Triangulacion",
                             f"{m['fichas']} fichas de hallazgos generadas.")
 
+    # Tab Ayuda: documentacion operativa del proceso
+    tab_ayuda = render_ayuda()
+
     js = """
     <script>
     document.querySelectorAll('.tab').forEach(tab => {
@@ -592,6 +596,7 @@ h1{{color:#a00}}</style></head>
 {tab_etapa_1}
 {tab_etapa_2}
 {tab_etapa_3}
+{tab_ayuda}
 
 <div class="footer">
     Generado por <code>fasp_dashboard.py</code> · Skill fasp-document-pipeline v1.1
@@ -603,7 +608,293 @@ h1{{color:#a00}}</style></head>
 </html>"""
 
 
-def main():
+def render_ayuda() -> str:
+    """Renderiza el tab de Ayuda con la documentacion operativa del proceso."""
+    return """
+    <div id="tab-ayuda" class="tab-content">
+        <div class="section">
+            <h2>Como invocar el proceso desde el agente</h2>
+            <p style="color:#6b7280">
+                El skill opera como un pipeline de 3 etapas. Cada modulo LLM/PY
+                se invoca con un comando CLI. El agente (Alfredo Dominguez Diaz)
+                coordina el stack completo.
+            </p>
+
+            <h3 style="margin-top:24px">Convencion de nombres para prompts al agente</h3>
+            <p>Cuando invoques un modulo LLM via el agente, usa el nombre exacto del sub-skill:</p>
+            <table>
+                <thead><tr><th>Comando del prompt</th><th>Modulo que dispara</th><th>Cuando invocarlo</th></tr></thead>
+                <tbody>
+                    <tr><td><code>"ejecuta LLM-1 sobre el MD"</code></td><td><code>llm-1-parser-juridico.py</code></td><td>Tras convertir PDF a MD (Etapa 1)</td></tr>
+                    <tr><td><code>"ejecuta LLM-2 sobre la salida de LLM-1"</code></td><td><code>llm-2-matriz-congruencia</code> (prompt)</td><td>Tras LLM-1, para clasificar unidades</td></tr>
+                    <tr><td><code>"ejecuta LLM-3 para el directorio de actores"</code></td><td><code>llm-3-directorio-actores</code> (prompt)</td><td>Tras LLM-1, paralelo a LLM-2</td></tr>
+                    <tr><td><code>"ejecuta PY-1"</code></td><td><code>py-1-estructuracion.py</code></td><td>Cierre Etapa 1 (genera Anexo 1)</td></tr>
+                    <tr><td><code>"ejecuta LLM-4 sobre las transcripciones"</code></td><td><code>llm-4-relaciones-campo</code> (prompt)</td><td>Etapa 2, inicio</td></tr>
+                    <tr><td><code>"ejecuta LLM-5 para normalizar nodos"</code></td><td><code>llm-5-normalizador-nodos</code> (prompt)</td><td>Tras LLM-4</td></tr>
+                    <tr><td><code>"ejecuta PY-2"</code></td><td><code>py-2-matrices-red.py</code></td><td>Tras LLM-5 (genera Anexos 4, matrices incidencia)</td></tr>
+                    <tr><td><code>"ejecuta PY-3"</code></td><td><code>py-3-metricas-ars.py</code></td><td>Tras PY-2 (genera Anexos 5, 6 + memoria algoritmica)</td></tr>
+                    <tr><td><code>"genera el sociograma"</code></td><td><code>py-3-sociograma.py</code></td><td>Tras PY-3</td></tr>
+                    <tr><td><code>"ejecuta LLM-6 para redactar hallazgos ARS"</code></td><td><code>llm-6-redactor-ars</code> (prompt)</td><td>Tras PY-3 (Producto 2 narrativo)</td></tr>
+                    <tr><td><code>"ejecuta LLM-7 para triangular"</code></td><td><code>llm-7-triangulador</code> (prompt)</td><td>Inicio Etapa 3</td></tr>
+                    <tr><td><code>"ejecuta LLM-8 para fichas de hallazgos"</code></td><td><code>llm-8-fichas-hallazgos</code> (prompt)</td><td>Tras LLM-7</td></tr>
+                    <tr><td><code>"ejecuta LLM-9 para el Informe Final"</code></td><td><code>llm-9-informe-final</code> (prompt)</td><td>Cierre Etapa 3</td></tr>
+                    <tr><td><code>"ejecuta PY-4 para exportar"</code></td><td><code>py-4-exportacion.py</code></td><td>Tras LLM-9 (genera Anexo 8)</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>Cuando cerrar una etapa y cuando continuar</h2>
+
+            <h3 style="margin-top:20px">Regla de cierre por etapa</h3>
+            <table>
+                <thead><tr><th>Etapa</th><th>Se puede cerrar cuando...</th><th>Accion a tomar</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td><b>Etapa 1 (Documental)</b></td>
+                        <td>
+                            (a) Todas las normas planeadas estan en la BD con sus unidades normativas.<br>
+                            (b) El Anexo 1 (Ficha tecnica FASP) esta generado por PY-1.<br>
+                            (c) <code>audit_log</code> tiene al menos 1 evento de LLM-1 y 1 de PY-1.
+                        </td>
+                        <td>
+                            Ejecutar <code>checkpoint.py --etapa etapa_1_documental --perfil coordinadora --anexo "Anexo 1" --decision aprobado</code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><b>Etapa 2 (Campo + ARS)</b></td>
+                        <td>
+                            (a) Las transcripciones de entrevistas estan ingestadas.<br>
+                            (b) LLM-4 extrajo aristas y LLM-5 normalizo los nodos.<br>
+                            (c) PY-2 genero la matriz de adyacencia.<br>
+                            (d) PY-3 calculo las 8 metricas ARS y la memoria algoritmica.<br>
+                            (e) LLM-6 redacto los borradores de hallazgos ARS.
+                        </td>
+                        <td>
+                            Ejecutar <code>checkpoint.py --etapa etapa_2_campo_ars --perfil analista_senior_redes --anexo "Anexo 4" --decision aprobado</code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><b>Etapa 3 (Triangulacion)</b></td>
+                        <td>
+                            (a) LLM-7 cruzo norma-red-campo.<br>
+                            (b) LLM-8 genero las fichas de hallazgos.<br>
+                            (c) LLM-9 redacto el Informe Final.<br>
+                            (d) PY-4 exporto el paquete replicable (Anexo 8).
+                        </td>
+                        <td>
+                            Ejecutar <code>checkpoint.py --etapa etapa_3_triangulacion --perfil coordinacion_evaluacion --anexo "Anexo 10" --decision aprobado</code>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="margin-top:24px">Cuando NO continuar (bloqueos)</h3>
+            <ul style="line-height:1.8">
+                <li>LLM devuelve un valor fuera de la taxonomia cerrada (ej. <code>tipo_competencia: "Mixta"</code>) -> <b>NO continuar</b>, corregir el LLM o reintentar con prompt mas estricto.</li>
+                <li>La cobertura del MD es &lt; 0.85 -> <b>NO continuar</b>, el PDF probablemente es escaneado y requiere OCR forzado.</li>
+                <li>Un anexo no valida contra su schema JSON -> <b>NO continuar</b>, revisar la salida del LLM.</li>
+                <li>El grafo ARS tiene &lt; 5 nodos -> <b>NO continuar</b>, el corpus es muy pequeno para metricas confiables.</li>
+                <li>Hay un gate de control sin registrar para la etapa actual -> <b>NO cerrar la etapa</b>.</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>Entradas, salidas y evidencias por etapa</h2>
+            <p style="color:#6b7280">
+                Cada modulo tiene un contrato claro de entradas, salidas y registros
+                de evidencia que quedan en la BD para auditoria.
+            </p>
+
+            <h3 style="margin-top:20px">Etapa 1: Analisis Documental</h3>
+            <table>
+                <thead><tr><th>Modulo</th><th>Entradas</th><th>Salidas</th><th>Evidencia en BD</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td><b>pdf-to-knowledge-graph</b> (reutilizado)</td>
+                        <td>PDF del corpus normativo (ruta local)</td>
+                        <td>
+                            <code>&lt;job_id&gt;.md</code> en <code>jobs/&lt;job_id&gt;/</code><br>
+                            <code>&lt;job_id&gt;.meta.json</code><br>
+                            <code>&lt;job_id&gt;.layout.json</code><br>
+                            <code>&lt;job_id&gt;.validation.json</code>
+                        </td>
+                        <td>Tabla <code>documentos</code> + <code>audit_log</code></td>
+                    </tr>
+                    <tr>
+                        <td><b>LLM-1 Parser juridico</b></td>
+                        <td>MD del PDF</td>
+                        <td>
+                            Filas en <code>normas</code> (1 por documento)<br>
+                            Filas en <code>norma_unidades</code> (N por unidad detectada: articulo, fraccion)
+                        </td>
+                        <td><code>audit_log</code> con modulo='LLM-1'</td>
+                    </tr>
+                    <tr>
+                        <td><b>LLM-2 Matriz de congruencia</b></td>
+                        <td>Salida de LLM-1</td>
+                        <td>Actualizacion de <code>norma_unidades</code> con tipo_competencia, nivel_obligatoriedad, dimension_ciclo</td>
+                        <td><code>audit_log</code> con modulo='LLM-2'</td>
+                    </tr>
+                    <tr>
+                        <td><b>LLM-3 Directorio de actores</b></td>
+                        <td>Normas clasificadas</td>
+                        <td>Filas en <code>actores</code> + <code>actor_etapas</code></td>
+                        <td><code>audit_log</code> con modulo='LLM-3'</td>
+                    </tr>
+                    <tr>
+                        <td><b>PY-1 Estructuracion</b></td>
+                        <td>Salidas de LLM-1, LLM-2, LLM-3</td>
+                        <td>
+                            IDs unicos asignados (<code>id_actor</code>)<br>
+                            <b>Anexo 1</b>: Ficha tecnica FASP (<code>FASP_2026_P1_&lt;EDO&gt;_INFORME_V1.0.md</code>)
+                        </td>
+                        <td><code>audit_log</code> con modulo='PY-1'</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="margin-top:24px">Etapa 2: Campo + ARS</h3>
+            <table>
+                <thead><tr><th>Modulo</th><th>Entradas</th><th>Salidas</th><th>Evidencia en BD</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td><b>LLM-4 Relaciones de campo</b></td>
+                        <td>Transcripciones de entrevistas semiestructuradas</td>
+                        <td>Filas en <code>aristas</code> (origen, destino, peso, tipo_vinculo, direccionalidad, frecuencia, canal, etapa_ciclo)</td>
+                        <td><code>audit_log</code> con modulo='LLM-4'</td>
+                    </tr>
+                    <tr>
+                        <td><b>LLM-5 Normalizador</b></td>
+                        <td>Edge list preliminar + directorio de actores</td>
+                        <td>Nodos unificados (alias colapsados, IDs consistentes)</td>
+                        <td><code>audit_log</code> con modulo='LLM-5'</td>
+                    </tr>
+                    <tr>
+                        <td><b>PY-2 Matrices de red</b></td>
+                        <td>Edge list + diccionario de nodos</td>
+                        <td>
+                            <code>anexo4_matriz_adyacencia_aristas.csv</code><br>
+                            <code>anexo4_matriz_adyacencia_cuadrada.csv</code><br>
+                            <code>anexo4_matriz_incidencia_actor_etapa.csv</code>
+                        </td>
+                        <td><code>audit_log</code> con modulo='PY-2'</td>
+                    </tr>
+                    <tr>
+                        <td><b>PY-3 Metricas ARS</b></td>
+                        <td>Matrices de PY-2</td>
+                        <td>
+                            <code>anexo5_memoria_algoritmica.md</code><br>
+                            <code>anexo6_diccionario_atributos.csv</code><br>
+                            Persistencia en <code>metricas_ars</code>
+                        </td>
+                        <td><code>audit_log</code> con modulo='PY-3'</td>
+                    </tr>
+                    <tr>
+                        <td><b>PY-3 Sociograma</b></td>
+                        <td>BD con aristas y metricas</td>
+                        <td>
+                            <code>FASP_2026_&lt;PRODUCTO&gt;_&lt;EDO&gt;_INFORME_V1.0.html</code> (interactivo con vis.js)<br>
+                            <code>FASP_2026_&lt;PRODUCTO&gt;_&lt;EDO&gt;_INFORME_V1.0.png</code> (estatico, si matplotlib)
+                        </td>
+                        <td>(archivo en disco, no BD)</td>
+                    </tr>
+                    <tr>
+                        <td><b>LLM-6 Redactor ARS</b></td>
+                        <td>Metricas + sociogramas</td>
+                        <td>Borrador narrativo del Producto 2 (Informe de Hallazgos)</td>
+                        <td><code>audit_log</code> con modulo='LLM-6'</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3 style="margin-top:24px">Etapa 3: Triangulacion</h3>
+            <table>
+                <thead><tr><th>Modulo</th><th>Entradas</th><th>Salidas</th><th>Evidencia en BD</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td><b>LLM-7 Triangulador</b></td>
+                        <td>Matriz Producto 1 + ARS Producto 2 + resumentes entrevistas</td>
+                        <td>Coincidencias/divergencias norma-red-campo + diagnostico de riesgos</td>
+                        <td>(archivo o BD externa)</td>
+                    </tr>
+                    <tr>
+                        <td><b>LLM-8 Fichas hallazgos</b></td>
+                        <td>Listado priorizado de problemas</td>
+                        <td>Filas en tabla <code>fichas</code> (estructura: verbo + producto + oportunidad + justificacion + efecto)</td>
+                        <td><code>audit_log</code> con modulo='LLM-8'</td>
+                    </tr>
+                    <tr>
+                        <td><b>LLM-9 Informe Final</b></td>
+                        <td>Diagnosticos + ARS + fichas validadas</td>
+                        <td>
+                            Informe Final narrativo (Producto 3)<br>
+                            <b>Anexo 7</b>: Glosario especializado<br>
+                            <b>Anexo 8</b>: Metodologia de replicabilidad (texto)
+                        </td>
+                        <td><code>audit_log</code> con modulo='LLM-9'</td>
+                    </tr>
+                    <tr>
+                        <td><b>PY-4 Exportacion</b></td>
+                        <td>Toda la BD</td>
+                        <td>
+                            <code>tabla_&lt;nombre&gt;.csv</code> por cada tabla<br>
+                            <b>Anexo 8</b>: <code>anexo8_metodologia_replicabilidad.md</code><br>
+                            Paquete replicable completo
+                        </td>
+                        <td><code>audit_log</code> con modulo='PY-4'</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section">
+            <h2>Como se cierra una etapa (paso a paso)</h2>
+            <ol style="line-height:1.8">
+                <li>
+                    <b>Verifica que todos los modulos de la etapa estan ejecutados.</b><br>
+                    Revisa el tab <i>Resumen</i> de este dashboard: las normas/conversiones
+                    deben tener score y rating. Si hay normas con "Sin MD", faltan conversiones.
+                </li>
+                <li>
+                    <b>Verifica que los gates de control de la etapa estan registrados.</b><br>
+                    Aunque el sistema actual no exige validacion de identidad, registra
+                    los gates para mantener trazabilidad:
+                    <pre style="background:#f3f4f6;padding:12px;border-radius:6px;margin:8px 0;font-size:12px"><code>python3 scripts/checkpoint.py --db ./fasp.db \\
+    --etapa etapa_1_documental \\
+    --perfil coordinadora \\
+    --anexo "Anexo 1" \\
+    --decision aprobado \\
+    --aprobador "Alfredo Dominguez Diaz"</code></pre>
+                </li>
+                <li>
+                    <b>Regenera este dashboard</b> con <code>python3 scripts/fasp_dashboard.py --db ./fasp.db --output ./dashboard.html</code>
+                    para confirmar visualmente que la etapa aparece cerrada.
+                </li>
+                <li>
+                    <b>Exporta el paquete replicable</b> con PY-4 al cierre de Etapa 3:
+                    <pre style="background:#f3f4f6;padding:12px;border-radius:6px;margin:8px 0;font-size:12px"><code>python3 scripts/py-4-exportacion.py --db ./fasp.db --output ./export/</code></pre>
+                </li>
+            </ol>
+        </div>
+
+        <div class="section">
+            <h2>Donde se ve la trazabilidad completa</h2>
+            <table>
+                <thead><tr><th>Que ver</th><th>Donde</th></tr></thead>
+                <tbody>
+                    <tr><td>Avance por etapa (cuantas normas, unidades, etc.)</td><td>Tab <b>Resumen</b> de este dashboard</td></tr>
+                    <tr><td>Lista de normas con score de conversion</td><td>Tab <b>Resumen</b> -> seccion "Lista de normas y conversiones"</td></tr>
+                    <tr><td>Detalle por norma (parametros, metricas, keywords faltantes)</td><td>Tab <b>Resumen</b> -> seccion "Detalle de cada norma"</td></tr>
+                    <tr><td>Timeline de operaciones (cada insert/update)</td><td>Tab <b>Resumen</b> -> seccion inferior</td></tr>
+                    <tr><td>Auditoria offline</td><td>SQLite directamente: <code>SELECT * FROM audit_log ORDER BY id DESC</code></td></tr>
+                    <tr><td>Reporte en JSON</td><td><code>python3 scripts/norms_list.py --jobs-dir ./jobs/ --output-json ./audit.json</code></td></tr>
+                    <tr><td>Auditoria de calidad por conversion</td><td><code>python3 scripts/audit_conversions.py --jobs-dir ./jobs/</code></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    """
     p = argparse.ArgumentParser(description="Dashboard HTML del pipeline FASP")
     p.add_argument("--db", required=True)
     p.add_argument("--output", required=True)
@@ -629,6 +920,82 @@ def main():
 
     print(f"OK Dashboard escrito en {output}")
     print(f"  Para abrirlo: open {output}")
+
+
+def main():
+    p = argparse.ArgumentParser(description="Dashboard HTML del pipeline FASP")
+    p.add_argument("--db", required=True)
+    p.add_argument("--output", required=True)
+    p.add_argument("--watch", type=int, default=0, metavar="N",
+                   help="Si se especifica, regenera el dashboard cada N segundos "
+                        "cuando la BD cambia. Usar con --output fijo.")
+    args = p.parse_args()
+
+    db_path = pathlib.Path(args.db)
+    output = pathlib.Path(args.output)
+
+    if args.watch > 0:
+        watch_mode(db_path, output, args.watch)
+    else:
+        generate_once(db_path, output)
+
+
+def generate_once(db_path: pathlib.Path, output: pathlib.Path):
+    """Genera el dashboard una vez."""
+    print(f"Leyendo {db_path}...")
+    data = query_db(db_path)
+
+    print(f"Generando dashboard en {output}...")
+    html = render_html(data, db_path)
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(html, encoding="utf-8")
+
+    if data["existe"]:
+        m = data["metricas"]
+        print(f"  Metricas: {m['normas']} normas, {m['unidades']} unidades, "
+              f"{m['actores']} actores, {m['aristas']} aristas")
+        print(f"  Lista de normas: {len(data['normas'])}")
+
+    print(f"OK Dashboard escrito en {output}")
+
+
+def watch_mode(db_path: pathlib.Path, output: pathlib.Path, interval: int):
+    """Regenera el dashboard cada N segundos cuando la BD cambia.
+
+    Detecta cambios comparando el mtime del archivo .db.
+    Útil cuando un agente ejecuta módulos en otro proceso.
+    """
+    print(f"Modo watch: regenerando cada {interval}s si la BD cambia")
+    print(f"  BD:    {db_path}")
+    print(f"  HTML:  {output}")
+    print(f"  Ctrl-C para salir.\n")
+
+    last_mtime = None
+    last_size = None
+
+    while True:
+        try:
+            if db_path.exists():
+                stat = db_path.stat()
+                mtime = stat.st_mtime
+                size = stat.st_size
+                if mtime != last_mtime or size != last_size:
+                    generate_once(db_path, output)
+                    last_mtime = mtime
+                    last_size = size
+                    print(f"  [watch] Regenerado a las {datetime.now().strftime('%H:%M:%S')}\n")
+                else:
+                    print(f"  [watch] Sin cambios ({datetime.now().strftime('%H:%M:%S')})")
+            else:
+                print(f"  [watch] BD no encontrada: {db_path}")
+            time.sleep(interval)
+        except KeyboardInterrupt:
+            print("\n[watch] Detenido por el usuario.")
+            break
+        except Exception as e:
+            print(f"  [watch] Error: {e}")
+            time.sleep(interval)
 
 
 if __name__ == "__main__":

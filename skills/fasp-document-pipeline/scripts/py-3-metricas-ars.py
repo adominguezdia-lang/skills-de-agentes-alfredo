@@ -239,7 +239,7 @@ def generar_anexo6(db_path: pathlib.Path, output_dir: pathlib.Path) -> dict:
     nodos = []
     for r in conn.execute("""
         SELECT a.id_actor, a.nombre_oficial, a.nivel_gobierno, a.entidad_federativa,
-               a.naturaleza_juridica, m.in_degree, m.out_degree, m.degree_centrality,
+               a.naturaleza, m.in_degree, m.out_degree, m.degree_centrality,
                m.betweenness, m.closeness, m.comunidad_id
         FROM actores a
         LEFT JOIN metricas_ars m ON a.id_actor = m.id_actor

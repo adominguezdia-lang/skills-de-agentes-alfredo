@@ -238,9 +238,12 @@ def process(md_path: pathlib.Path, db_path: pathlib.Path, fuente_doc_id: str = N
     jerarquia = detect_jerarquia(text)
     unidades = segmentar_unidades(text)
 
-    id_norma = make_id(nombre)
-    if fuente_doc_id is None:
-        fuente_doc_id = make_id(md_path.name)
+    # Si se pasa doc_id, derivar id_norma de él (garantiza unicidad por documento).
+    # Si no, derivar del nombre (modo legacy, susceptible a colisiones).
+    if fuente_doc_id is not None:
+        id_norma = make_id(fuente_doc_id)
+    else:
+        id_norma = make_id(nombre)
 
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()

@@ -35,8 +35,88 @@ No usar para:
 | **2** | **Pipeline FASP completo** | Encadenar los 6 scripts del método 1 + `nomenclatura.py` + `checkpoint.py` | Cuando el output debe respetar la nomenclatura `FASP_2026_<PRODUCTO>_<EDO>_<TIPO>_V<X>.<EXT>` y los 15 gates humanos. |
 | **3** | **Agente Hermes local** | Decirle al agente en conversación: "Convierte /ruta/al.pdf a Markdown usando el skill pdf-to-knowledge-graph y luego genera los Anexos 1-3" | Exploración, debugging, iteración conversacional. Latencia: ~3-10s por paso. |
 | **4** | **Perfil `fasp-bedrock`** (Claude Sonnet 4.5) | `fasp-bedrock chat -q "..." --tools 'terminal,file'` | Supervisión, revisión cualitativa, redacción de hallazgos ARS (Producto 2) e Informe Final (Producto 3). ⚠️ **No usar para ejecutar el pipeline completo**: cada tool call incurre en round-trip HTTP a Bedrock (~5-15s de latencia cada uno), por lo que los 6 pasos tardan **> 3 minutos** cuando por CLI son 30 segundos. Mezclar los dos (por ejemplo, pedirle al agente que ejecute el pipeline) funciona pero desperdicia tiempo de Bedrock. |
+| **5** | **Sync desde Google Drive** | `fasp_sync_drive` (wrapper en `~/.hermes/bin/`) | Trae los PDFs nuevos desde la carpeta de Drive de FASP, los descarga con nomenclatura FASP_2026, y los convierte a MD automáticamente. Detecta archivos ya procesados por hash SHA-256 (idempotente). |
 
 Después de cualquier ejecución, regenera el dashboard: `python3 scripts/fasp_dashboard.py --db ./fasp.db --output ./dashboard.html && open dashboard.html`.
+
+## Etapa 0 — Sincronización desde Google Drive (opcional, recomendado)
+
+El equipo C-evalua mantiene los TDR y normatividades en una carpeta de Google Drive (root ID `1fMCP-xvtUfvUMO8h0pMi3V4nFbqnUG85`, cuenta `adominguezdia@ia4people.com`). El script `scripts/fasp_sync_drive.py` descarga los PDFs nuevos, los renombra con nomenclatura FASP_2026, y los convierte a MD para alimentar la Etapa 1.
+
+### Pre-requisitos (una sola vez por máquina)
+
+1. Token OAuth de Google en `~/.hermes/google_token.json` (scope `drive`). Si no existe, ejecutar el flujo de `google-workspace/scripts/setup.py` o copiar el token ya generado en `~/Downloads/google_hermes_access/`.
+2. `pymupdf` instalado en el venv que usen los agentes: `~/.hermes/hermes-agent/venv/bin/pip install pymupdf`.
+3. Wrapper en PATH: `~/.hermes/bin/fasp_sync_drive` (ya creado en este perfil).
+
+### Comandos
+
+```bash
+# Sync completo (8 estados + normatividad federal)
+fasp_sync_drive
+
+# Solo un estado
+fasp_sync_drive --edo MEX
+
+# Dry-run (lista sin descargar)
+fasp_sync_drive --dry-run
+
+# Forzar reprocesamiento de un file_id específico
+fasp_sync_drive --force 1raabu45rXGPXh3EeupAuTQxz9_-HPdlT
+
+# Resetear la tabla de hashes (re-procesar TODO)
+fasp_sync_drive --reset-seen
+```
+
+### Cómo decide qué es "nuevo"
+
+1. Recorre las 8 carpetas de estados + la normatividad federal (`ESTADOS` en el script, contiene los folder_ids).
+2. Lista PDFs recursivamente en cada carpeta.
+3. **Excluye automáticamente** cualquier archivo cuyo nombre contenga `FASP Registro Normatividad` (es el consolidado xlsx, ya manejado en otra parte del pipeline).
+4. Para cada PDF candidato, busca su `file_id` en `~/.hermes/state/fasp_drive_seen.json`.
+   - Si no está → descarga, calcula SHA-256, registra en seen.
+   - Si está y el hash coincide → salta (ya visto).
+   - Si está y el hash difiere → vuelve a procesar (cambió el contenido).
+5. Convierte PDF→MD usando `pdf-to-knowledge-graph/scripts/pdf_to_md.py`.
+
+### Layout generado
+
+```
+~/Downloads/FASP/09 FASP/
+├── EdoMex/
+│   ├── corpus/
+│   │   └── FASP_2026_P1_MEX_TDR_V1.0.pdf       # PDF descargado, renombrado
+│   └── jobs/
+│       └── fasp_MEX_FASP_2026_P1_MEX_TDR_V1.0_<hash>.md  # + .meta.json, .layout.json, .validation.json
+├── Hidalgo/
+│   └── ...
+└── Normatividad federal/
+    └── ...
+
+~/.hermes/state/fasp_drive_seen.json              # Tabla de hashes
+```
+
+### Variables de entorno
+
+| Var | Default | Para qué |
+|---|---|---|
+| `FASP_CORPUS_ROOT` | `~/Downloads/FASP/09 FASP` | Carpeta raíz donde se depositan corpus/ y jobs/ por estado |
+| `HERMES_HOME` | `~/.hermes` | Raíz de configuración Hermes |
+| `GOOGLE_DRIVE_TOKEN` | `~/.hermes/google_token.json` | Ruta al token OAuth |
+
+### Cuándo correrlo
+
+- **Antes de cada corrida de Etapa 1**: para incorporar PDFs nuevos que aparezcan en Drive entre corrida y corrida.
+- **Idempotente**: correrlo 2 veces seguidas solo procesa archivos la primera vez (los demás aparecen como "ya visto").
+- **No corre la Etapa 1**: solo descarga + convierte a MD. Para ejecutar LLM-1, PY-1, etc., sigue el flujo normal del pipeline.
+
+### Pitfalls
+
+- **El filtro `FASP Registro Normatividad` solo aplica al nombre del archivo.** Si el archivo consolidado de Drive se renombra (p. ej. `FASP_Registro_Normatividad_2026.xlsx`), el filtro no lo detecta. Ajustar la lista en el script si pasa.
+- **Los archivos de las subcarpetas `02 15Ago Primer entregable`, `03 15Sept Segundo entregable`, etc. quedan vacíos** por ahora. Cuando los llenen, esos PDFs entrarán al sync automáticamente (no están excluidos).
+- **No se sincronizan Google Docs/Sheets nativos**, solo PDFs. Si en Drive hay un `.gdoc` con el mismo nombre, se ignora. Exportar a PDF desde Drive primero si se necesita.
+- **El hash es por contenido, no por nombre.** Si alguien sube un PDF con nombre distinto pero el mismo contenido (p. ej. copia), se procesa dos veces. Esto es a propósito: distintas versiones del mismo documento pueden requerir procesamientos distintos.
+
 
 ## Arquitectura de 3 etapas con 13 módulos
 
@@ -151,6 +231,10 @@ Pero el FASP **extiende** significativamente:
 
 11. **Invocar el pipeline completo via agente Bedrock esperando respuesta rápida**. El pipeline completo (PDF→MD→entidades→BD→Anexos) ejecutado directamente desde CLI toma < 30 segundos para un PDF típico de 50 KB / 3 páginas. La **misma cadena de 6 pasos ejecutada por un agente conversacional (Claude Sonnet 4.5 vía AWS Bedrock) tarda > 3 minutos** porque cada tool call incurre en round-trip HTTP a Bedrock (~5-15s de latencia cada uno). Decisión: **usa CLI directo para batch y producción; usa el agente Bedrock solo para revisión, supervisión o cuando necesitas interpretación cualitativa del LLM**. Mezclar los dos (por ejemplo, pedirle al agente que ejecute el pipeline completo) funciona pero desperdicia tiempo de Bedrock. Cuando el usuario diga "procesa este PDF con el skill", ejecuta los scripts directamente salvo que pida explícitamente "usando el agente de Bedrock".
 
+12. **Renombrar archivos `.json` auxiliares del job con la nomenclatura `FASP_2026_*` y esperar que el validador los acepte**. El validador `nomenclatura.py` usa una regex que captura toda la cadena después del último `_V<x.y>` como `ext`: si el archivo es `FASP_2026_P1_NAL_INFORME_V1.0.md`, la regex captura `ext = .md` ✓; pero si es `FASP_2026_P1_NAL_INFORME_V1.0.meta.json`, captura `ext = .meta.json` que no está en el enum de extensiones válidas y falla. **Convención operativa** confirmada durante la sesión: el archivo `INFORME_Vx.y.<ext>` se renombra; los archivos auxiliares (`meta.json`, `layout.json`, `validation.json`) **se dejan con sufijo `.json` después del nombre** sin nomenclatura FASP_2026 (no son entregables finales). Ver `references/common-errors.md` para más. Si en el futuro quieres incluirlos como entregables, se necesita una variante de nomenclatura que permita sufijos múltiples.
+
+13. **Asumir que `audit_conversions.py` encuentra el PDF si está en la misma carpeta que el job**. El script original solo buscaba en rutas predecibles (corpus/, jobs/, parent del job). Fallaba cuando el job se había movido (por ejemplo, después de renombrar el MD a nomenclatura FASP_2026 y moverlo a la raíz). **Fix implementado**: `find_pdf_for_job` ahora busca agresivamente en `~/Downloads`, `~/Documents`, `~/Desktop`, y en la ruta del script. Si quieres auditar jobs cuyos PDFs están en otra ubicación, pásale el path del PDF directamente con `--pdf-path`.
+
 ## Workflow de versioning: reducir primero, endurecer después
 
 El usuario (Alfredo) usa un patrón específico al revisar el skill entre versiones. Memorízalo así la próxima vez que recibas feedback tipo "está muy grande" o "tiene cosas que no funcionan":
@@ -212,6 +296,47 @@ Etapa 3:
 [ ] Sin contradicción con anexos previos
 ```
 
+## Cómo se invoca el dashboard (modo agente)
+
+Cuando un agente (como Hermes) opera el pipeline, debe regenerar el dashboard después de CUALQUIER operación que modifique la BD. Tres modos disponibles:
+
+### Modo 1 — Regeneración explícita (recomendado para agentes)
+
+Después de cada operación que modifica la BD, ejecutar:
+
+```bash
+python3 ~/.hermes/skills/productivity/fasp-document-pipeline/scripts/fasp_dashboard.py \
+    --db ./fasp.db --output ./dashboard.html
+```
+
+El agente (Alfredo Dominguez Diaz coordina el stack) debe ejecutar este comando al cierre de cada módulo:
+- Tras `pdf_to_md.py` (cambia jobs/<id>/).
+- Tras `llm-1-parser-juridico.py` (cambia normas, norma_unidades, audit_log).
+- Tras `py-1-estructuracion.py` (cambia IDs de actores, genera Anexo 1).
+- Tras `checkpoint.py` (cambia checkpoints, audit_log).
+- Tras cualquier otro módulo (LLM-2..9, PY-2..4).
+
+### Modo 2 — Watch automático (para sesiones largas)
+
+Si vas a ejecutar muchos módulos en poco tiempo, lanza el watch en background y el HTML se regenera solo cada N segundos:
+
+```bash
+python3 ~/.hermes/skills/productivity/fasp-document-pipeline/scripts/fasp_dashboard.py \
+    --db ./fasp.db --output ./dashboard.html --watch 5
+```
+
+El watch detecta cambios en la BD comparando `mtime` + `size` del archivo. Cada 5 segundos verifica si hay cambios y regenera. **Ctrl-C para detener.**
+
+### Modo 3 — Alias del shell
+
+Añadir a `~/.zshrc` o `~/.bashrc`:
+
+```bash
+alias fasp-dash="python3 ~/.hermes/skills/productivity/fasp-document-pipeline/scripts/fasp_dashboard.py --db ./fasp.db --output ./dashboard.html && open ./dashboard.html"
+```
+
+Luego cada vez que quieras ver el dashboard actualizado: solo `fasp-dash`.
+
 ## Cómo se invocan los LLMs
 
 Los 9 módulos LLM son **sub-skills activables** con prompts documentados. El usuario tiene 3 opciones de invocación:
@@ -256,15 +381,18 @@ Por defecto, el skill viene con **Opción A** (placeholders con prompts document
 - `references/equipo_cevalua.json` — Los 14 integrantes del equipo C-evalua.
 - `references/cronograma.json` — Fechas de entrega escalonadas por quincena.
 - `references/memoria_codificacion.json` — Escala de intensidad (0-10) y 3 criterios de visualización.
+- `references/agent-operational-guide.md` — **Guía operativa para invocar el pipeline desde el agente.** Convención de nombres de prompts (14 comandos LLM-N/PY-N), reglas de cierre por etapa, 5 bloqueos, contrato de entradas/salidas por módulo, y dónde consultar la trazabilidad. Es la versión textual de lo que muestra el tab "Ayuda del proceso" del dashboard.
 - `references/bedrock-setup.md` — Receta operativa para ejecutar el skill desde un perfil Hermes con AWS Bedrock (Claude Sonnet 4.5 / Haiku 4.5), incluyendo latencias esperadas por operación y los pitfalls del wrapper `fasp-bedrock`.
 - `references/test-case-csn.md` — Caso de prueba reproducible (CSN.pdf, 2 páginas, 49.6 KB) con el resultado completo del pipeline y el hallazgo que llevó al pitfall de clasificación monoetiqueta de unidades transversales.
 - `references/pipeline-recipe.md` — **Receta compacta del pipeline en 6 pasos CLI** con variables de entorno, comandos exactos, tiempos esperados, errores comunes y criterios para usar Bedrock vs CLI. Es el primer archivo a leer cuando un usuario nuevo pregunta "¿cómo proceso un PDF?".
 - `references/common-errors.md` — **Catálogo de errores frecuentes** con causa raíz y solución concreta: `IntegrityError` por tildes faltantes en constraints, zip desincronizado, dashboard con gates fantasma, Nomenclatura inválida, clasificación monoetiqueta de unidades transversales, etc.
 - `references/gates-and-traceability.md` — **Modelo de diseño de los gates de control** (metadata de trazabilidad, NO firmas de identidad). Documenta cuándo este modelo es correcto, cuándo NO lo es, y el anti-patrón de sobre-ingeniería de identidad que Alfredo Domínguez corrigió durante el diseño. Lectura obligatoria si una sesión futura vuelve a proponer validación de usuarios.
 - `scripts/fasp_dashboard.py` — Genera dashboard HTML autocontenido (sin servidor web, sin dependencias externas) con 4 tabs (Resumen / Etapa 1 / Etapa 2 / Etapa 3), métricas globales, 15 gates humanos coloreados, tabla de las 8 entidades federativas y timeline del audit_log. Uso: `python3 scripts/fasp_dashboard.py --db ./fasp.db --output ./dashboard.html && open dashboard.html`.
+- `scripts/audit_conversions.py` — Audita la calidad de cada conversión PDF→MD leyendo el PDF original y comparándolo contra el MD producido. Calcula cobertura, similitud de texto (SequenceMatcher), preservación de keywords (palabras en MAYÚSCULAS del PDF que sobreviven en el MD), estructura del MD (headings, listas, tablas) y un score compuesto 0-100. Soporta búsqueda agresiva del PDF original en `~/Downloads`, `~/Documents`, `~/Desktop` (útil cuando el job se movió de carpeta). Uso: `python3 scripts/audit_conversions.py --jobs-dir ./jobs/ --output-json ./audit.json`. **Umbrales calibrados con CSN.pdf (job csn-39021, 2 páginas, 49.6 KB): score 99.78/100, similitud 0.975, preservación de keywords 1.0.** Detalle de la metodología, tabla de umbrales, pitfalls del auditor y receta para reproducir el benchmark: `references/audit-quality.md`.
+- `scripts/norms_list.py` — Lista las normas/conversiones de una BD SQLite con sus parámetros (method, prompt, layer, páginas) y métricas de calidad (cobertura, similitud, preservación de keywords, score 0-100). Acepta `--layer` para filtrar, `--output-csv` y `--output-json` para exportar. Es el equivalente CLI del tab "Resumen" del dashboard, útil para integrar con otros pipelines o generar reportes en formato tabular. Uso: `python3 scripts/norms_list.py --jobs-dir ./jobs/`.
 - `tests/test_smoke.py` — 12 tests: BD, taxonomías, schemas, nomenclatura, sociograma end-to-end.
 
-## Estado de implementación (v1.1 — acoplado al Plan de Trabajo FASP 2026)
+## Estado de implementación (v1.2 — validado contra Producto 1 Querétaro)
 
 | Componente | Estado |
 |---|---|
@@ -272,19 +400,115 @@ Por defecto, el skill viene con **Opción A** (placeholders con prompts document
 | BD SQLite con esquema para 12 anexos | ✅ Funcional |
 | Taxonomías cerradas (5 vocabularios + entidades federativas) | ✅ Funcional (validables) |
 | Nomenclatura obligatoria `FASP_2026_<PRODUCTO>_<EDO>_<TIPO>_V<X>.<EXT>` | ✅ Funcional (scripts/nomenclatura.py) |
+| Sync desde Google Drive (Etapa 0) | ✅ Funcional (`scripts/fasp_sync_drive.py`) — idempotente por hash SHA-256, filtra xlsx de registro, wrapper `fasp_sync_drive` en `~/.hermes/bin/` |
 | Referencias del Plan de Trabajo (entidades, equipo, cronograma, memoria) | ✅ 4 archivos JSON en references/ |
 | LLM-1 Parser jurídico | ✅ Funcional (regex + keywords) |
-| LLM-2 a LLM-9 | 📋 Prompts documentados (placeholders activables) |
+| **LLM-2 Analisis normativo (Apartados 5 y 6)** | ✅ **Funcional** (`scripts/llm-2-matriz-congruencia.py`) — produce MD con cuadro analítico + párrafo narrativo + tipología |
+| **Generador del Producto 1 con estructura 5.x/6.x** | ✅ **Funcional** (`scripts/compilar_producto_1.py`) — formato LEY POR LEY + ACTOR POR ACTOR con sub-etapas |
 | PY-1 Estructuración (Anexo 1) | ✅ Funcional |
 | PY-2 Constructor matrices ARS | ✅ Funcional |
 | PY-3 Métricas ARS (8 + geodesica_promedio) | ✅ Funcional |
 | PY-3-sociograma con 3 criterios formales del Plan | ✅ Funcional |
 | PY-4 Exportación | ✅ Funcional |
-| Dashboard HTML de seguimiento | ✅ Funcional (`scripts/fasp_dashboard.py`) |
-| Checkpoints humanos (5 perfiles × 3 etapas) | ✅ Funcional |
+| Dashboard HTML de seguimiento (5 tabs) | ✅ Funcional (`scripts/fasp_dashboard.py`) |
+| Dashboard con lista de normas (en lugar de gates) | ✅ Funcional (modo `--watch N` para auto-regeneración) |
+| Auditoría de calidad de conversiones PDF→MD | ✅ Funcional (`scripts/audit_conversions.py`) |
+| Helpers para agente (regenerar_dashboard.py) | ✅ Funcional |
+| Checkpoints humanos (5 perfiles × 3 etapas) | ✅ Funcional (metadata de trazabilidad, NO firmas de identidad) |
 | Catálogo de unidades administrativas | 📋 Base inicial (~60), extensible |
 | Detección patrones jurídicos | ✅ Funcional (regex) |
 | Schemas para Anexos 1-12 | ✅ 9 schemas JSON (1, 2, 3, 4, 5, 6, 10, 11, 12) |
+| **Cadena de fallbacks LLM (MiniMax → OpenRouter → Hermes CLI)** | ✅ **Funcional** |
+
+## Cadena de fallbacks para invocar LLMs
+
+`llm-2-matriz-congruencia.py` usa una cadena de 3 niveles para garantizar disponibilidad:
+
+1. **MiniMax API directa** — primario. Requiere `MINIMAX_API_KEY` y `MINIMAX_BASE_URL`. Modelos disponibles: `MiniMax-M3` (recomendado, con razonamiento), `MiniMax-Text-01` (más rápido).
+
+2. **OpenRouter** — fallback 1. Requiere `OPENROUTER_API_KEY` y `OPENROUTER_BASE_URL`. El modelo se construye como `minimax/<modelo>` (ej: `minimax/minimax-extra-high`). Útil cuando la cuota de MiniMax se agota o hay rate limiting.
+
+3. **Hermes CLI** — fallback 2. Ejecuta `hermes chat -q <prompt> -m minimax/<modelo>`. No requiere API key (usa la configurada en Hermes).
+
+El script intenta el nivel 1 primero; si falla, pasa al 2; si falla, pasa al 3. Solo si los 3 fallan termina con error. Configuración en `/tmp/fasp-keys/.env`:
+
+```bash
+# Primario (MiniMax)
+MINIMAX_API_KEY=sk-api-...
+MINIMAX_BASE_URL=https://api.minimax.io/v1
+MINIMAX_MODEL=MiniMax-M3
+
+# Fallback (OpenRouter)
+OPENROUTER_API_KEY=sk-or-v1-...
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=minimax/minimax-m3
+```
+
+Si trabajas solo con un proveedor, basta con tener sus variables. El script detectará cuáles están disponibles.
+
+## Observaciones del reporte de validación de Querétaro (v1.2)
+
+El 2 de agosto de 2026 se hizo una validación preliminar del Producto 1 de Querétaro contra el corpus local (60 archivos PDF en `10_Corpus_Definitivo/04_Queretaro_Jackie/01_Normatividad`). Se tomaron 12 citas aleatorias + barrido automático de 181 citas únicas. Resultado: **muestra respaldada por la fuente**, pero 4 observaciones a corregir.
+
+### Observación 1 — Artículos `bis` representados como `.5`
+
+**Síntoma:** El Word registraba `Art. 28.5`, `Art. 50.5`, `Art. 7.5`, etc. La forma jurídica correcta es `Art. 28 Bis`, `Art. 50 Bis`, etc.
+
+**Causa raíz:** El extractor de artículos captura `Articulo 5 bis` como `"5bis"` y al hacer `float(num_str)` lo convierte en `5.5`. Esto perdía la marca `bis`.
+
+**Fix implementado en `compilar_producto_1.py`:**
+- Función `normalizar_numero_articulo(num)` que convierte `5.5` → `"5 Bis"`, `5` → `"5"`.
+- Aplicada en los 2 lugares donde se muestra el número: tabla del marco jurídico (apartado 5) y tabla por actor (apartado 6).
+
+**Verificación:** 0 artículos con `.5`, 30 artículos con `Bis` correctamente formateados en Querétaro.
+
+### Observación 2 — Mezcla de leyes bajo la etiqueta de Coord Fiscal
+
+**Síntoma:** El bloque "Ley de Coordinación Fiscal Estatal Intermunicipal del Estado de Querétaro" agrupaba artículos de otros ordenamientos (presupuesto, contabilidad, electoral) porque el PDF oficial es un compendio que contiene varias leyes.
+
+**Decisión:** **No requiere fix.** El reporte marcó esto como **recomendación**, no como error crítico. La cita SÍ está respaldada por la fuente (el PDF físicamente contiene el artículo). Si un artículo está físicamente dentro del PDF `LEY-DE-COORDINACION-FISCAL-ESTATAL-INTERMUNICIPAL-...`, la etiqueta es legítima. Si en el futuro el usuario requiere separar las leyes internas del compendio, la solución sería: (1) detectar los separadores "TÍTULO/CAPÍTULO" dentro del PDF; (2) agrupar artículos por sección; (3) cambiar la etiqueta de la ley a la sección específica. Esto no se implementó porque (a) añade complejidad, (b) el reporte lo marca como recomendado pero no como error, y (c) la trazabilidad con el PDF original se mantiene.
+
+### Observación 3 — Falta bibliografía final consolidada
+
+**Síntoma:** El Word usaba citas parentéticas `(Congreso del Estado de Querétaro, 2024)` pero no tenía sección final de bibliografía.
+
+**Fix implementado en `compilar_producto_1.py`:**
+- Nueva sección final "Referencias bibliográficas" (página separada) con 4 subsecciones:
+  - "Fuentes del corpus normativo estatal" (ruta al corpus)
+  - "Leyes estatales analizadas" (lista las 4 leyes con sus artículos en formato `Art. 1, 5 Bis, 6, 7, ...`)
+  - "Normativa federal de referencia" (Criterios Generales FASP, Lineamientos, Reglamento SESNSP, LGSNSP, Convenio FASP firmado)
+  - "Notas metodológicas" (origen del análisis, normalización de citas, fallback de LLM)
+
+### Observación 4 — Limpieza de citas directas
+
+**Síntoma:** Espacios insertados por extracción PDF/OCR dentro de palabras: `en tidades`, `eje rcerá`, `Informa ción`, `compet ente`.
+
+**Causa raíz:** El extractor PDF produce espacios en lugares donde originalmente había saltos de línea o ligaduras tipográficas.
+
+**Fix implementado en `compilar_producto_1.py`:**
+- Función `normalizar_texto_cita(texto)` con regex `(?<=[a-záéíóúñ])\s+(?=[a-záéíóúñ])` que quita espacio entre letras minúsculas.
+- Aplicada en los 3 lugares donde se inserta texto de artículo: cita del párrafo narrativo, tabla del marco jurídico, tabla por actor.
+
+**Verificación:** 0 espacios malformados en Querétaro.
+
+### Resumen de la validación
+
+| Cita muestra | Ley | Artículo | Página | ¿Respaldada? |
+|---|---|---:|---:|---|
+| OK | Ley Orgánica del Poder Ejecutivo del Estado de Querétaro | 6 | 4 | ✅ |
+| OK | Ley Orgánica del Poder Ejecutivo del Estado de Querétaro | 8 | 4 | ✅ |
+| OK | Ley Orgánica del Poder Ejecutivo del Estado de Querétaro | 5 | 4 | ✅ |
+| OK | Ley de Seguridad para el Estado de Querétaro | 27 | 14 | ✅ |
+| OK | Ley de Seguridad para el Estado de Querétaro | 28 | 14 | ✅ |
+| OK | Ley de Seguridad para el Estado de Querétaro | 39 | 21 | ✅ |
+| OK | Ley para el Manejo de los Recursos Públicos del Estado de Querétaro | 93 | 30 | ✅ |
+| OK | Ley para el Manejo de los Recursos Públicos del Estado de Querétaro | 53 Bis | 19 | ✅ |
+| OK | Ley para el Manejo de los Recursos Públicos del Estado de Querétaro | 4 | 20 | ✅ |
+| OK | Ley de Coordinación Fiscal Estatal Intermunicipal del Estado de Querétaro | 154 | 65 | ✅ |
+| OK | Ley de Coordinación Fiscal Estatal Intermunicipal del Estado de Querétaro | 32 | 124 | ✅ |
+| OK | Ley de Coordinación Fiscal Estatal Intermunicipal del Estado de Querétaro | 15 | 88 | ✅ |
+
+**Las 12 citas de la muestra están respaldadas por el corpus local.**
 
 ## Acoplamiento al Plan de Trabajo FASP 2026
 
