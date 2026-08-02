@@ -1,7 +1,7 @@
 ---
 name: fasp-document-pipeline
 description: "Pipeline LLM–Python–ARS para la Evaluación Estratégica de Coordinación al FASP (Fondo de Aportaciones para la Seguridad Pública). Procesa 3 etapas secuenciales (análisis documental, trabajo de campo + ARS, triangulación + recomendaciones) con 9 módulos LLM (LLM-1 a LLM-9), 4 scripts Python (PY-1 a PY-4), y produce los 12 anexos TdR. Incluye BD SQLite para trazabilidad y sistema de checkpoints por perfil humano. Reutiliza pdf-to-knowledge-graph para la Etapa 1. Triggers: 'fasp', 'seguridad pública', 'matriz de congruencia', 'análisis de redes fasp', 'evaluación fasp', 'convenio fasp', 'triangulación norma-red-campo'. Distinct from pdf-to-knowledge-graph (que es solo extracción genérica sin taxonomía cerrada) and from biblio-metadata-extractor (que extrae solo metadata bibliográfica)."
-version: 1.0.0
+version: 1.2.3
 author: Alfredo Domínguez
 license: MIT
 platforms: [linux, macos]
@@ -351,6 +351,14 @@ Por defecto, el skill viene con **Opción A** (placeholders con prompts document
 
 **Coordinación**: Alfredo Domínguez Díaz (Analista Senior Redes+ARS) opera el stack completo. Las decisiones sobre cuándo invocar cada LLM, con qué prompt y con qué parámetros son su responsabilidad.
 
+## Scripts principales del skill (v1.2.3)
+
+|| Script | Función |
+|---|---|---|
+| **`scripts/llm-2-matriz-congruencia.py`** | Genera el análisis normativo (MD) con cuadro analítico + párrafos narrativos + tipología para apartados 5 y 6. Usa cadena de fallbacks MiniMax → OpenRouter → Hermes CLI. |
+| **`scripts/compilar_producto_1.py`** | Compila el Word del Producto 1 con estructura 5.x/6.x. Incluye: Marco metodológico con 5 etapas, citas directas normalizadas, tablas por proceso, Leyes estatales compactas, Análisis vs guardarriel, Referencias. |
+| **`scripts/delimitar_normas_fasp.py`** | Cruza normas del corpus contra el guardarriel. Clasifica cada norma como MANTENER / REVISAR / FALTANTE / EXCLUIR. Usa `TABLA_Normatividad_<Estado>.md` si existe, o fallback `extraer_leyes_del_corpus()`. |
+
 ## Support files
 
 - `sub-skills/llm-1-parser-juridico.md` — Entradas/Tareas/Salida/Prompt del LLM-1.
@@ -392,35 +400,66 @@ Por defecto, el skill viene con **Opción A** (placeholders con prompts document
 - `scripts/norms_list.py` — Lista las normas/conversiones de una BD SQLite con sus parámetros (method, prompt, layer, páginas) y métricas de calidad (cobertura, similitud, preservación de keywords, score 0-100). Acepta `--layer` para filtrar, `--output-csv` y `--output-json` para exportar. Es el equivalente CLI del tab "Resumen" del dashboard, útil para integrar con otros pipelines o generar reportes en formato tabular. Uso: `python3 scripts/norms_list.py --jobs-dir ./jobs/`.
 - `tests/test_smoke.py` — 12 tests: BD, taxonomías, schemas, nomenclatura, sociograma end-to-end.
 
-## Estado de implementación (v1.2 — validado contra Producto 1 Querétaro)
+## Estado de implementación (v1.2.3 — Marco metodológico + simplificaciones + análisis vs guardarriel)
 
-| Componente | Estado |
-|---|---|
-| `pdf-to-knowledge-graph` (sub-componente Etapa 1) | ✅ Funcional (reusado) |
-| BD SQLite con esquema para 12 anexos | ✅ Funcional |
-| Taxonomías cerradas (5 vocabularios + entidades federativas) | ✅ Funcional (validables) |
-| Nomenclatura obligatoria `FASP_2026_<PRODUCTO>_<EDO>_<TIPO>_V<X>.<EXT>` | ✅ Funcional (scripts/nomenclatura.py) |
-| Sync desde Google Drive (Etapa 0) | ✅ Funcional (`scripts/fasp_sync_drive.py`) — idempotente por hash SHA-256, filtra xlsx de registro, wrapper `fasp_sync_drive` en `~/.hermes/bin/` |
-| Referencias del Plan de Trabajo (entidades, equipo, cronograma, memoria) | ✅ 4 archivos JSON en references/ |
-| LLM-1 Parser jurídico | ✅ Funcional (regex + keywords) |
-| **LLM-2 Analisis normativo (Apartados 5 y 6)** | ✅ **Funcional** (`scripts/llm-2-matriz-congruencia.py`) — produce MD con cuadro analítico + párrafo narrativo + tipología |
-| **Generador del Producto 1 con estructura 5.x/6.x** | ✅ **Funcional** (`scripts/compilar_producto_1.py`) — formato LEY POR LEY + ACTOR POR ACTOR con sub-etapas |
-| PY-1 Estructuración (Anexo 1) | ✅ Funcional |
-| PY-2 Constructor matrices ARS | ✅ Funcional |
-| PY-3 Métricas ARS (8 + geodesica_promedio) | ✅ Funcional |
-| PY-3-sociograma con 3 criterios formales del Plan | ✅ Funcional |
-| PY-4 Exportación | ✅ Funcional |
-| Dashboard HTML de seguimiento (5 tabs) | ✅ Funcional (`scripts/fasp_dashboard.py`) |
-| Dashboard con lista de normas (en lugar de gates) | ✅ Funcional (modo `--watch N` para auto-regeneración) |
-| Auditoría de calidad de conversiones PDF→MD | ✅ Funcional (`scripts/audit_conversions.py`) |
-| Helpers para agente (regenerar_dashboard.py) | ✅ Funcional |
-| Checkpoints humanos (5 perfiles × 3 etapas) | ✅ Funcional (metadata de trazabilidad, NO firmas de identidad) |
-| Catálogo de unidades administrativas | 📋 Base inicial (~60), extensible |
-| Detección patrones jurídicos | ✅ Funcional (regex) |
-| Schemas para Anexos 1-12 | ✅ 9 schemas JSON (1, 2, 3, 4, 5, 6, 10, 11, 12) |
-| **Cadena de fallbacks LLM (MiniMax → OpenRouter → Hermes CLI)** | ✅ **Funcional** |
+| Componente | Estado | Notas |
+|---|---|---|
+| `pdf-to-knowledge-graph` (sub-componente Etapa 1) | ✅ Funcional | Reusado |
+| BD SQLite con esquema para 12 anexos | ✅ Funcional | |
+| Taxonomías cerradas (5 vocabularios + entidades federativas) | ✅ Funcional | Validables |
+| Nomenclatura obligatoria `FASP_2026_<PRODUCTO>_<EDO>_<TIPO>_V<X>.<EXT>` | ✅ Funcional | `scripts/nomenclatura.py` |
+| Sync desde Google Drive (Etapa 0) | ✅ Funcional | Idempotente por hash SHA-256, wrapper `fasp_sync_drive` |
+| Referencias del Plan de Trabajo (entidades, equipo, cronograma, memoria) | ✅ | 4 archivos JSON en `references/` |
+| LLM-1 Parser jurídico | ✅ Funcional | Regex + keywords |
+| **LLM-2 Análisis normativo (Apartados 5 y 6)** | ✅ Funcional | `scripts/llm-2-matriz-congruencia.py` |
+| **Generador del Producto 1 con estructura 5.x/6.x** | ✅ Funcional | `scripts/compilar_producto_1.py` |
+| **Marco metodológico con las 5 etapas del guardarriel** | ✅ **Nuevo en v1.2.3** | Sección al inicio del Word: definición + actores para cada etapa |
+| **Análisis vs guardarriel (TABLA_Normatividad cruzada)** | ✅ **Nuevo en v1.2.3** | Tabla compacta 3 columnas: Guardarriel / MD / Corpus |
+| **Leyes estatales en tabla compacta** | ✅ **Nuevo en v1.2.3** | Máximo 6 arts + "(+N)" para evitar líneas de 200+ caracteres |
+| **Normalizador de citas revertedido** | ✅ **Fix v1.2.3** | Versión anterior quitaba espacios entre palabras legítimas; ahora solo colapsa saltos de línea |
+| PY-1 Estructuración (Anexo 1) | ✅ Funcional | |
+| PY-2 Constructor matrices ARS | ✅ Funcional | |
+| PY-3 Métricas ARS (8 + geodesica_promedio) | ✅ Funcional | |
+| PY-3-sociograma con 3 criterios formales del Plan | ✅ Funcional | |
+| PY-4 Exportación | ✅ Funcional | |
+| Dashboard HTML (5 tabs) | ✅ Funcional | `scripts/fasp_dashboard.py` |
+| Auditoría de calidad de conversiones PDF→MD | ✅ Funcional | `scripts/audit_conversions.py` |
+| Checkpoints humanos (5 perfiles × 3 etapas) | ✅ Funcional | Metadata de trazabilidad, NO firmas de identidad |
+| Cadena de fallbacks LLM (MiniMax → OpenRouter → Hermes CLI) | ✅ Funcional | |
 
-## Cadena de fallbacks para invocar LLMs
+### Qué hay nuevo en v1.2.3 (2 ago 2026)
+
+**1. Marco metodológico con las 5 etapas del guardarriel**
+
+Al inicio del Word, antes del apartado 5, se inserta una sección "Marco metodológico" con:
+- Párrafo introductorio explicando qué es el Producto 1 y cómo se organiza.
+- Las 5 etapas del ciclo FASP con su **definición operativa** y **actores clave**:
+  - **5.2 Integración**: propuesta, consolidación y aprobación del Anexo Técnico. Faculta al Gobernador a suscribir el Convenio FASP.
+  - **5.3 Distribución**: criterios de distribución, fórmulas, notificación a entidades, Presupuesto de Egresos.
+  - **5.4 Administración**: gestión programática, presupuestal y operativa. Programas de obras, adquisiciones, entrega-recepción.
+  - **5.5 Supervisión**: control y fiscalización. Auditoría concurrente y ex post.
+  - **5.6 Seguimiento**: captura en sistemas, reportes trimestrales, evaluación con Programas con Prioridad Nacional.
+- Subsección "Convergencia con la normativa" explicando el contraste estatal vs federal.
+
+Las definiciones provienen del guardarraíl del cliente (documentadas en `Resumen_citas_Hidalgo_v3.md`).
+
+**2. Análisis vs guardarriel**
+
+Sección al final del Word (dentro de "Referencias") que cruza las normas del corpus contra el guardarriel (TABLA_Normatividad o, si no existe, leyes extraídas directamente del corpus):
+- **EdoMex**: usa `TABLA_Normatividad_EdoMex.md` como fuente del guardarriel (47 normas).
+- **QRO/MIC/HID**: usa fallback `extraer_leyes_del_corpus()` que lee archivos NOR-* y DOC-* de la carpeta de extraccion.
+- Tabla compacta de 3 columnas: `Guardarriel / MD (LLM-2) / Corpus`.
+- Clasificación MANTENER / REVISAR / FALTANTE / EXCLUIR por norma.
+
+**3. Leyes estatales en tabla compacta**
+
+En lugar de bullets con 70+ artículos en una línea, cada ley se muestra como tabla de 2 columnas (Ley | Arts.) con máximo 6 artículos + "(+N)" si hay más. Evita líneas de 200+ caracteres.
+
+**4. Normalizador de citas revertido**
+
+La versión v1.2.2 usaba `(?<=[a-záéíóúñ])\s+(?=[a-záéíóúñ])` que **eliminaba espacios entre palabras legítimas** (ej. "Gobernador del Estado" → "Gobernadordel Estado"). **Fix en v1.2.3**: el normalizador ahora solo colapsa espacios múltiples y saltos de línea (`\s+` → `" "`). Errores menores de OCR ("en tidades") se mantienen porque arreglarlos requiere un diccionario del español.
+
+
 
 `llm-2-matriz-congruencia.py` usa una cadena de 3 niveles para garantizar disponibilidad:
 

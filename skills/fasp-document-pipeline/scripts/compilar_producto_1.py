@@ -1194,7 +1194,14 @@ def build_producto_1(estado: str, leyes: list[dict], output_path: pathlib.Path,
     # 5.2 - 5.6: Cada proceso con parrafo narrativo CON CITAS + tabla de articulos
     tabla_counter = 1
     for idx, proc in enumerate(PROCESOS):
-        add_heading_styled(doc, f"5.{idx+2}. {proc.upper()}", 2)
+        key = f"5.{idx+2}"
+        add_heading_styled(doc, f"{key}. {proc.upper()}", 2)
+
+        # Definicion de la etapa (del guardarriel)
+        if key in ETAPAS_FASP:
+            etapa = ETAPAS_FASP[key]
+            add_paragraph(doc, etapa["definicion"])
+            add_paragraph(doc, f"Actores clave: {etapa['actores']}", style="Intense Quote")
 
         # Parrafo narrativo con citas directas
         parrafo = construir_parrafo_con_citas(estado, proc, leyes)
