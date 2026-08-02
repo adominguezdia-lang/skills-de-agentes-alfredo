@@ -39,6 +39,11 @@ ESTADOS = {
         "entes": "• Gobernador del Estado\n• Consejo Estatal de Seguridad Pública\n• Secretaría de Seguridad Pública (SSP)\n• Fiscalía General del Estado\n• SESESP\n• Secretaría de Finanzas y Administración (SFA)\n• Auditoría Superior de Michoacán (ASM)",
         "anio": "2023",
     },
+    "Edomex": {
+        "ejecutores": "• SSEM (001)\n• FGJEM (002)\n• SESESPEM",
+        "entes": "• Gobernadora del Estado\n• Consejo Estatal de Seguridad Pública\n• Secretaría de Seguridad del Estado de México (SSEM)\n• Fiscalía General de Justicia del Estado de México (FGJEM)\n• SESESPEM\n• Secretaría de Finanzas del Estado de México\n• OSFEM (Órgano Superior de Fiscalización del Estado de México)",
+        "anio": "2024",
+    },
 }
 
 # Leyes a buscar por estado (con keywords para identificar el archivo)
@@ -119,6 +124,32 @@ LEYES_BUSQUEDA = {
             "filename_pattern": r"LEY-PRESUPUESTO-HIDALGO",
             "key_articles": [1, 4, 12, 13, 14, 15],
             "fuente": "Congreso del Estado de Hidalgo",
+        },
+    ],
+    "Edomex": [
+        {
+            "nombre": "Codigo Financiero del Estado de Mexico y Municipios",
+            "filename_pattern": r"CODIGO-FINANCIERO-ESTADO-MEXICO",
+            "key_articles": [1, 2, 5, 12, 13, 14, 15],
+            "fuente": "Congreso del Estado de Mexico",
+        },
+        {
+            "nombre": "Codigo Administrativo del Estado de Mexico",
+            "filename_pattern": r"CODIGO-ADMINISTRATIVO-DEL-ESTADO-DE-MEXICO",
+            "key_articles": [1, 5, 6, 7, 8, 13],
+            "fuente": "Congreso del Estado de Mexico",
+        },
+        {
+            "nombre": "Ley Organica de la Administracion Publica del Estado de Mexico",
+            "filename_pattern": r"LEY-ORGANICA-PUBLICADA-EN-EL-PERIODICO-OFICIAL|LEY-ORGANICA-ADMINISTRACION-PUBLICA-MEXICO",
+            "key_articles": [1, 5, 6, 7, 8, 13, 19],
+            "fuente": "Congreso del Estado de Mexico",
+        },
+        {
+            "nombre": "Ley de Seguridad del Estado de Mexico",
+            "filename_pattern": r"LEY-ESTATAL-PUBLICADA-EN-EL-PERIODICO-OFICIAL-GACETA",
+            "key_articles": [1, 5, 6, 7, 8, 13],
+            "fuente": "Gobierno del Estado de Mexico",
         },
     ],
 }
@@ -249,6 +280,48 @@ ACTORES = {
              ["Captura en sistemas", "Generación de reportes", "Consolidación de informes", "Evaluación del desempeño"]),
             ("Secretaría de Finanzas del Estado de Hidalgo",
              ["Captura en sistemas", "Generación de reportes", "Consolidación de informes", "Evaluación del desempeño"]),
+        ],
+    },
+    "Edomex": {
+        "Integracion": [
+            ("Secretariado Ejecutivo del Sistema Estatal de Seguridad Publica del Estado de Mexico (SESESPEM)",
+             ["Captura de propuestas en sistema", "Consolidacion del Anexo Tecnico", "Validacion con el Secretariado Nacional"]),
+            ("Secretaria de Finanzas del Estado de Mexico",
+             ["Recepcion de techo presupuestario", "Validacion de copago estatal", "Registro en sistemas de presupuesto"]),
+            ("Consejo Estatal de Seguridad Publica del Estado de Mexico",
+             ["Sesion ordinaria de validacion", "Aprobacion del Anexo Tecnico", "Publicacion en periodico oficial"]),
+        ],
+        "Distribucion": [
+            ("SHCP / UPER",
+             ["Determinacion del monto", "Aplicacion de formulas", "Notificacion a entidades"]),
+            ("SESNSP / DGVS",
+             ["Emision de criterios", "Validacion de proyectos", "Aprobacion de Anexo Tecnico"]),
+            ("Congreso del Estado de Mexico",
+             ["Aprobacion del Presupuesto de Egresos del Estado", "Publicacion", "Control legislativo"]),
+        ],
+        "Administracion": [
+            ("Secretaria de Finanzas del Estado de Mexico",
+             ["Programa de obras y adquisiciones", "Procedimientos de adjudicacion", "Ejecucion", "Entrega-recepcion"]),
+            ("Secretaria de Seguridad del Estado de Mexico (SSEM)",
+             ["Programa de obras", "Programa de adquisiciones", "Ejecucion", "Entrega-recepcion"]),
+            ("Organo Interno de Control de la SSEM",
+             ["Programa de obras", "Programa de adquisiciones", "Ejecucion", "Entrega-recepcion"]),
+        ],
+        "Supervision": [
+            ("DGVS / SESNSP",
+             ["Supervision tecnica", "Revision de legalidad", "Auditoria concurrente", "Auditoria ex post"]),
+            ("OSFEM (Organo Superior de Fiscalizacion del Estado de Mexico)",
+             ["Supervision tecnica", "Revision de legalidad", "Auditoria concurrente", "Auditoria ex post"]),
+            ("ASF (Auditoria Superior de la Federacion)",
+             ["Supervision tecnica", "Revision de legalidad", "Auditoria concurrente", "Auditoria ex post"]),
+        ],
+        "Seguimiento": [
+            ("Secretariado Ejecutivo Estatal del Estado de Mexico (SESESPEM)",
+             ["Captura en sistemas", "Generacion de reportes trimestrales", "Consolidacion de informes", "Evaluacion del desempeno"]),
+            ("DGVS / SESNSP",
+             ["Captura en sistemas", "Generacion de reportes", "Consolidacion de informes", "Evaluacion del desempeno"]),
+            ("Secretaria de Finanzas del Estado de Mexico",
+             ["Captura en sistemas", "Generacion de reportes", "Consolidacion de informes", "Evaluacion del desempeno"]),
         ],
     },
 }
@@ -1111,43 +1184,38 @@ def build_producto_1(estado: str, leyes: list[dict], output_path: pathlib.Path,
         f"(iii) criterios de suspension de recursos no parametrizados."
     )
 
-    # FIX 3: Bibliografia final consolidada
+    # FIX 3: Referencias finales
     doc.add_page_break()
-    add_heading_styled(doc, "Referencias bibliograficas", 1)
+    add_heading_styled(doc, "Referencias", 1)
 
-    add_heading_styled(doc, "Fuentes del corpus normativo estatal", 2)
+    add_heading_styled(doc, "Fuentes del corpus", 2)
     add_paragraph(doc,
-        f"El presente Producto 1 se elaboro a partir del corpus normativo del estado de {estado}, "
-        f"disponible en /Users/adominguezdia/Documents/FASP/{extraccion_dir.name}/."
+        f"Analisis elaborado a partir del corpus normativo de {estado}, "
+        f"disponible en /Users/.../{extraccion_dir.name}/."
     )
 
-    add_heading_styled(doc, "Leyes estatales analizadas", 3)
+    add_heading_styled(doc, "Leyes estatales", 3)
     for ley in leyes:
         if not ley["articulos"]:
             continue
         arts_nums = sorted(set(a["numero"] for a in ley["articulos"]))
-        arts_str = ", ".join(normalizar_numero_articulo(n) for n in arts_nums)
-        fuente = ley.get("fuente_match", "LLM-2")
-        add_paragraph(doc, f"{ley['nombre']} ({ley['fuente']}). Articulos analizados: {arts_str}. Fuente del analisis: {fuente}.")
+        arts_mostrar = arts_nums[:20]
+        arts_str = ", ".join(normalizar_numero_articulo(n) for n in arts_mostrar)
+        if len(arts_nums) > 20:
+            arts_str += f" (+{len(arts_nums) - 20} mas)"
+        add_paragraph(doc, f"- {ley['nombre']}. Arts.: {arts_str}")
 
-    add_heading_styled(doc, "Normativa federal de referencia", 3)
-    add_paragraph(doc, "Criterios Generales para la Administracion y Ejercicio de los Recursos del FASP 2026 (DOF, 27 de diciembre de 2025).")
-    add_paragraph(doc, "Lineamientos Generales de Evaluacion del Fondo de Aportaciones para la Seguridad Publica (DOF, 2025).")
-    add_paragraph(doc, "Reglamento del Secretariado Ejecutivo del Sistema Nacional de Seguridad Publica (DOF).")
-    add_paragraph(doc, "Ley General del Sistema Nacional de Seguridad Publica (DOF).")
-    add_paragraph(doc, "Convenio de Coordinacion del FASP firmado entre la Federacion y el Estado de " + estado + " (2026).")
+    add_heading_styled(doc, "Normativa federal", 3)
+    add_paragraph(doc, "- Criterios Generales del FASP 2026 (DOF, 27 dic 2025)")
+    add_paragraph(doc, "- Lineamientos de Evaluacion del FASP (DOF, 2025)")
+    add_paragraph(doc, "- Reglamento del SESNSP (DOF)")
+    add_paragraph(doc, "- Ley General del Sistema Nacional de Seguridad Publica (DOF)")
+    add_paragraph(doc, f"- Convenio FASP {estado} 2026 (firma Federacion-Estado)")
 
     add_heading_styled(doc, "Notas metodologicas", 3)
-    add_paragraph(doc,
-        "- Las citas directas provienen de los articulos identificados como relevantes al FASP por el LLM-2 (MiniMax-M3, "
-        "via API directa de MiniMax). Cuando se agoto la cuota, se recurrio al fallback via OpenRouter."
-    )
-    add_paragraph(doc,
-        "- Los articulos con numeracion decimal (ej. 28.5) se representan en su forma juridica correcta (Art. 28 Bis)."
-    )
-    add_paragraph(doc,
-        "- Los espacios insertados por extraccion PDF/OCR (ej. 'en tidades', 'eje rcerá') fueron normalizados."
-    )
+    add_paragraph(doc, "- Citas del LLM-2 (MiniMax-M3, API directa). Fallback: OpenRouter.")
+    add_paragraph(doc, "- Articulos 'bis' formateados correctamente (ej. Art. 28 Bis, no 28.5).")
+    add_paragraph(doc, "- Espacios insertados por extraccion PDF/OCR normalizados.")
 
     # Footer final
     p = doc.add_paragraph()
