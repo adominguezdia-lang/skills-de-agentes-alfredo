@@ -1018,9 +1018,65 @@ def interpretar_articulo(art, proc: str, nombre_ley: str = "") -> str:
 # BUILD DEL DOCUMENTO
 # ======================================================================
 
+def estado_corpus_id(estado: str) -> str:
+    """Mapea el estado al identificador de carpeta del corpus definitivo.
+
+    Ej: 'Queretaro' -> '04_Queretaro_Jackie'
+        'Michoacan' -> '03_Michoacan_Jeronimo'
+        'Hidalgo' -> '02_Hidalgo_Diana'
+        'Edomex' -> '01_EdoMex_Nancy_G'
+    """
+    mapping = {
+        "Queretaro": "04_Queretaro_Jackie",
+        "Michoacan": "03_Michoacan_Jeronimo",
+        "Hidalgo": "02_Hidalgo_Diana",
+        "Edomex": "01_EdoMex_Nancy_G",
+        "Chiapas": "05_Chiapas_Diana",
+        "Tabasco": "06_Tabasco_Jeronimo",
+        "Tamaulipas": "07_Tamaulipas_Jackie",
+        "Zacatecas": "08_Zacatecas_Maca",
+    }
+    return mapping.get(estado, f"99_{estado}")
+
+
+def extraer_leyes_del_corpus(corpus_dir: pathlib.Path) -> list[dict]:
+    """Extrae las leyes (PDFs NOR- y DOC-) del corpus.
+
+    Si el estado no tiene TABLA_Normatividad_<Estado>.md, usamos esta
+    funcion como fallback: cualquier archivo NOR- del corpus se considera
+    'norma esperada'.
+    """
+    leyes = []
+    if not corpus_dir or not corpus_dir.exists():
+        return leyes
+    for f in corpus_dir.glob("*.txt"):
+        nombre = f.name
+        # Filtrar: NOR-* (normas) y DOC-* (documentos)
+        if "NOR-" in nombre or ("DOC-" in nombre and "LEY" in nombre.upper()):
+            # Extraer nombre legible
+            legible = nombre
+            for prefijo in ["FASP_2026_P1_", "_V10", "_V11", "_V12", "_V13", "_V14", ".txt"]:
+                legible = legible.replace(prefijo, "")
+            for edo in ["QRO_", "MIC_", "HID_", "MEX_", "CHI_", "TAB_", "TAM_", "ZAC_", "NAL_"]:
+                if legible.startswith(edo):
+                    legible = legible[len(edo):]
+            # Quitar guion bajo al inicio
+            legible = legible.replace("_", " ").strip()
+            leyes.append({
+                "apartado": "Leyes del corpus",
+                "num": len(leyes) + 1,
+                "norma": legible,
+                "existe_texto": "Sí (en corpus)",
+                "carpeta": str(corpus_dir.name),
+                "ubicacion": str(f),
+            })
+    return leyes
+
+
 def build_producto_1(estado: str, leyes: list[dict], output_path: pathlib.Path,
                       articulos_desde_md: dict = None,
-                      extraccion_dir: pathlib.Path = None):
+                      extraccion_dir: pathlib.Path = None,
+                      md_path: pathlib.Path = None):
     """Construye el Word del Producto 1.
 
     articulos_desde_md: dict {nombre_ley: set(nums)} con los articulos
@@ -1205,6 +1261,86 @@ def build_producto_1(estado: str, leyes: list[dict], output_path: pathlib.Path,
             arts_str += f" (+{len(arts_nums) - 20} mas)"
         add_paragraph(doc, f"- {ley['nombre']}. Arts.: {arts_str}")
 
+    # FIX 5: Analisis vs normativa del guardarriel
+    add_heading_styled(doc, "Analisis vs guardarriel", 3)
+    guardarriel_path = pathlib.Path(
+        f"/Users/adominguezdia/Documents/FASP/10_Corpus_Definitivo/{estado_corpus_id(estado)}/"
+    )
+    corpus_base = pathlib.Path("/Users/adominguezdia/Documents/FASP/10_Corpus_Definitivo/")
+    tabla_norm_path = None
+    fuente_guardarriel = None
+    if guardarriel_path.exists():
+        for f in guardarriel_path.glob("TABLA_Normatividad_*.md"):
+            tabla_norm_path = f
+            fuente_guardarriel = "TABLA_Normatividad"
+            break
+
+    # Estrategia:
+    # 1. Si hay TABLA_Normatividad_<Estado>.md, usar ese (preferido)
+    # 2. Si no, extraer leyes del corpus directamente (NOR-* y DOC-*LEY*)
+    # 3. LISTA_Normatividad_por_Carpeta.md solo lista archivos (no leyes),
+    #    asi que no se usa como fuente del guardarriel
+    normas_inline = None
+    if not tabla_norm_path:
+        corpus_dir_local_early = pathlib.Path(extraccion_dir) if extraccion_dir else pathlib.Path(".")
+        normas_inline = extraer_leyes_del_corpus(corpus_dir_local_early)
+        if normas_inline:
+            tabla_norm_path = pathlib.Path("inline")
+            fuente_guardarriel = f"Leyes del corpus ({len(normas_inline)})"
+
+    if tabla_norm_path and (tabla_norm_path.exists() or str(tabla_norm_path) == "inline"):
+        if normas_inline is not None:
+            add_paragraph(doc, f"Comparacion con: leyes del corpus (N={len(normas_inline)})")
+        else:
+            add_paragraph(doc, f"Comparacion con: {tabla_norm_path.name} ({fuente_guardarriel})")
+        try:
+            from delimitar_normas_fasp import (
+                parsear_tabla_normatividad,
+                parsear_md_llm2,
+                clasificar_norma,
+                clasificar_leyes_no_en_guardarriel,
+            )
+            if normas_inline is not None:
+                normas_g = normas_inline
+            else:
+                normas_g = parsear_tabla_normatividad(tabla_norm_path)
+            leyes_llm = parsear_md_llm2(md_path) if md_path and md_path.exists() else []
+            corpus_dir_local = pathlib.Path(extraccion_dir) if extraccion_dir else pathlib.Path(".")
+            archivos_corpus = [f.name for f in corpus_dir_local.glob("*.txt")]
+            corpus_n = len(archivos_corpus)
+
+            guardarriel_keywords = set()
+            for n in normas_g:
+                guardarriel_keywords.update({w for w in n["norma"].lower().split() if len(w) >= 5})
+
+            clasif_g = [(n, clasificar_norma(n, leyes_llm, archivos_corpus, guardarriel_keywords))
+                        for n in normas_g]
+            clasif_e = clasificar_leyes_no_en_guardarriel(leyes_llm, normas_g)
+
+            from collections import Counter
+            cnt = Counter(c for _, c in clasif_g)
+            extras_cnt = Counter(e["categoria"] for e in clasif_e)
+
+            add_paragraph(doc, f"- Normas del guardarriel: {len(normas_g)}")
+            add_paragraph(doc, f"  - MANTENER (en guardarriel + corpus): {cnt.get('MANTENER', 0)}")
+            add_paragraph(doc, f"  - REVISAR (en corpus pero no en MD): {cnt.get('REVISAR', 0)}")
+            add_paragraph(doc, f"  - FALTANTE (no en corpus): {cnt.get('FALTANTE', 0)}")
+            add_paragraph(doc, f"- Leyes del MD fuera del guardarriel:")
+            add_paragraph(doc, f"  - FASP relevantes: {extras_cnt.get('FASP_FUERA_GUARDARRIEL', 0)}")
+            add_paragraph(doc, f"  - A excluir (programas estatales no FASP): {extras_cnt.get('EXCLUIR', 0)}")
+
+            excluidas = [e["nombre"] for e in clasif_e if e["categoria"] == "EXCLUIR"]
+            if excluidas:
+                add_paragraph(doc, "")
+                add_paragraph(doc, "Leyes del MD que no contribuyen al FASP (programas estatales):")
+                for e in excluidas[:10]:
+                    add_paragraph(doc, f"  - {e}")
+        except Exception as e:
+            add_paragraph(doc, f"(No se pudo generar el cruce automatico: {e})")
+    else:
+        add_paragraph(doc, f"No se encontro TABLA_Normatividad_{estado}.md en {guardarriel_path}")
+        add_paragraph(doc, "El corpus se valida solo por presencia del archivo, sin cruzar contra el guardarriel.")
+
     add_heading_styled(doc, "Normativa federal", 3)
     add_paragraph(doc, "- Criterios Generales del FASP 2026 (DOF, 27 dic 2025)")
     add_paragraph(doc, "- Lineamientos de Evaluacion del FASP (DOF, 2025)")
@@ -1275,7 +1411,8 @@ def main():
     print(f"Generando Producto 1 ({args.estado}) con citas directas...")
     build_producto_1(args.estado, leyes, output_path,
                      articulos_desde_md=articulos_desde_md,
-                     extraccion_dir=extraccion_dir)
+                     extraccion_dir=extraccion_dir,
+                     md_path=pathlib.Path(args.md) if args.md else None)
 
     print(f"OK Documento guardado en {output_path}")
     print(f"   Tamano: {output_path.stat().st_size:,} bytes")
