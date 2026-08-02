@@ -474,13 +474,20 @@ def normalizar_numero_articulo(num) -> str:
 
 
 def normalizar_texto_cita(texto: str) -> str:
-    """Elimina espacios insertados por extraccion PDF/OCR.
+    """Normaliza texto de cita SIN alterar espacios entre palabras.
 
-    Ej: 'en tidades' -> 'entidades', 'eje rcerá' -> 'ejercerá'
+    Solo hace correcciones puntuales:
+    - Quita saltos de linea sueltos entre palabras
+    - NO altera espacios entre palabras (esto lo hacia mal antes:
+      'Gobernador del Estado' se convertia en 'Gobernadordel Estado')
+
+    Nota: errores menores tipo 'en tidades' (de OCR) se conservan
+    en el Word porque arreglarlos requiria un diccionario del
+    espanol. El reporte de validacion indico que 'no invalidan la
+    fuente' aunque afecten presentacion.
     """
-    # Quitar espacio entre letras (patron: letra + espacio + letra)
-    # Pero no si el espacio esta entre palabras (mayuscula)
-    texto = re.sub(r"(?<=[a-záéíóúñ])\s+(?=[a-záéíóúñ])", "", texto)
+    # Reemplazar saltos de linea y espacios multiples por un solo espacio
+    texto = re.sub(r"\s+", " ", texto).strip()
     return texto
 
 
@@ -1073,6 +1080,72 @@ def extraer_leyes_del_corpus(corpus_dir: pathlib.Path) -> list[dict]:
     return leyes
 
 
+# ======================================================================
+# DEFINICIONES DE LAS 5 ETAPAS (guardarriel)
+# ======================================================================
+
+ETAPAS_FASP = {
+    "5.2": {
+        "nombre": "Integracion",
+        "definicion": "Procesos de propuesta, consolidacion y aprobacion del Anexo Tecnico del FASP. Faculta al Gobernador a suscribir el Convenio FASP con el Ejecutivo Federal, valida el copago estatal, y consolida las propuestas de los ejecutores.",
+        "actores": "SESESP / Consejo Estatal / S. de Finanzas",
+    },
+    "5.3": {
+        "nombre": "Distribucion",
+        "definicion": "Criterios de distribucion, formulas y variables para asignar los recursos del FASP. Notificacion a entidades federativas y aprobacion del Presupuesto de Egresos estatal que incluye las aportaciones federales (FASP del Ramo 33).",
+        "actores": "SHCP / UPER / SESNSP / Congreso del Estado",
+    },
+    "5.4": {
+        "nombre": "Administracion",
+        "definicion": "Gestion programatica, presupuestal y operativa de los recursos del FASP. Incluye programas de obras y adquisiciones, procedimientos de adjudicacion, ejercicio del gasto y entrega-recepcion.",
+        "actores": "S. de Finanzas / S. de Seguridad / OIC",
+    },
+    "5.5": {
+        "nombre": "Supervision",
+        "definicion": "Control y fiscalizacion de los recursos federales transferidos (FASP). Incluye supervision tecnica, revision de legalidad, auditoria concurrente (durante el ejercicio) y auditoria ex post.",
+        "actores": "DGVS / SESNSP / OSFE / ASF / OIC",
+    },
+    "5.6": {
+        "nombre": "Seguimiento",
+        "definicion": "Captura en sistemas, generacion de reportes periodicos (mensuales/trimestrales), consolidacion de informes y evaluacion del desempeno con base en los Programas con Prioridad Nacional.",
+        "actores": "SEE / DGVS / S. de Finanzas / SEPLAN",
+    },
+}
+
+
+def agregar_introduccion_etapas(doc, estado: str):
+    """Agrega una introduccion al analisis normativo con las 5 etapas del FASP.
+
+    Las definiciones provienen del guardarriel del cliente (segun
+    Resumen_citas_Hidalgo_v3.md, que documenta la trazabilidad del analisis
+    normativo de Hidalgo con las fases 5.2 a 5.6).
+    """
+    add_heading_styled(doc, "Marco metodologico", 1)
+    add_paragraph(doc,
+        "El Producto 1 analiza la normativa estatal que aplica al FASP "
+        "(Fondo de Aportaciones para la Seguridad Publica) conforme al "
+        f"ciclo del FASP definido por el cliente para {estado}. El analisis "
+        "se organiza en 5 etapas, cada una con su marco regulatorio:"
+    )
+
+    add_heading_styled(doc, "Etapas del ciclo FASP", 2)
+    for key in ["5.2", "5.3", "5.4", "5.5", "5.6"]:
+        etapa = ETAPAS_FASP[key]
+        add_heading_styled(doc, f"{key} {etapa['nombre']}", 3)
+        add_paragraph(doc, etapa["definicion"])
+        add_paragraph(doc, f"Actores clave: {etapa['actores']}")
+        add_paragraph(doc, "")
+
+    add_heading_styled(doc, "Convergencia con la normativa", 2)
+    add_paragraph(doc,
+        "El analisis contrasta la normativa estatal contra la federal "
+        "(Criterios Generales del FASP, Lineamientos de Evaluacion, "
+        "Reglamento del SESNSP, LGSNSP, Convenio de Coordinacion FASP). "
+        "Solo las normas que contienen articulos relacionados con el FASP "
+        "se incluyen en el cuadro analitico del apartado 5."
+    )
+
+
 def build_producto_1(estado: str, leyes: list[dict], output_path: pathlib.Path,
                       articulos_desde_md: dict = None,
                       extraccion_dir: pathlib.Path = None,
@@ -1115,21 +1188,8 @@ def build_producto_1(estado: str, leyes: list[dict], output_path: pathlib.Path,
 
     doc.add_page_break()
 
-    # === APARTADO 5: ANALISIS DEL MARCO JURIDICO-NORMATIVO ===
-    add_heading_styled(doc, "5. ANALISIS DEL MARCO JURIDICO-NORMATIVO", 1)
-
-    # 5.1 Marco conceptual
-    add_heading_styled(doc, "5.1 Marco conceptual y metodologico del analisis", 2)
-    add_paragraph(doc,
-        f"El presente apartado analiza el marco juridico-normativo del FASP para el "
-        f"estado de {estado} en el ejercicio fiscal 2026. El analisis adopta la "
-        f"metodologia LEY POR LEY, organizando las leyes estatales por cada uno de "
-        f"los cinco procesos del ciclo FASP: Integracion, Distribucion, "
-        f"Administracion, Supervision y Seguimiento. Para cada ley se identifica: "
-        f"(i) el objeto y naturaleza del ordenamiento, (ii) el alcance normativo en "
-        f"el proceso respectivo, (iii) el articulado especifico aplicable al FASP, "
-        f"y (iv) la referencia bibliografica institucional."
-    )
+    # === MARCO METODOLOGICO CON LAS 5 ETAPAS DEL GUARDARRIEL ===
+    agregar_introduccion_etapas(doc, estado)
 
     # 5.2 - 5.6: Cada proceso con parrafo narrativo CON CITAS + tabla de articulos
     tabla_counter = 1
