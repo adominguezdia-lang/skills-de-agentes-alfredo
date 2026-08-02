@@ -1246,8 +1246,7 @@ def build_producto_1(estado: str, leyes: list[dict], output_path: pathlib.Path,
 
     add_heading_styled(doc, "Fuentes del corpus", 2)
     add_paragraph(doc,
-        f"Analisis elaborado a partir del corpus normativo de {estado}, "
-        f"disponible en /Users/.../{extraccion_dir.name}/."
+        f"Corpus normativo de {estado}: /Users/.../{extraccion_dir.name}/"
     )
 
     add_heading_styled(doc, "Leyes estatales", 3)
@@ -1255,11 +1254,31 @@ def build_producto_1(estado: str, leyes: list[dict], output_path: pathlib.Path,
         if not ley["articulos"]:
             continue
         arts_nums = sorted(set(a["numero"] for a in ley["articulos"]))
-        arts_mostrar = arts_nums[:20]
+        total = len(arts_nums)
+        arts_mostrar = arts_nums[:6]
         arts_str = ", ".join(normalizar_numero_articulo(n) for n in arts_mostrar)
-        if len(arts_nums) > 20:
-            arts_str += f" (+{len(arts_nums) - 20} mas)"
-        add_paragraph(doc, f"- {ley['nombre']}. Arts.: {arts_str}")
+        if total > 6:
+            arts_str += f" (+{total - 6})"
+        # Tabla compacta de 2 columnas (Ley | Arts.) para mejor lectura
+        t = doc.add_table(rows=1, cols=2)
+        t.style = "Table Grid"
+        t.autofit = False
+        hdr = t.rows[0].cells
+        hdr[0].text = "Ley"
+        hdr[1].text = f"Arts. ({total})"
+        for cell in hdr:
+            for p in cell.paragraphs:
+                for r in p.runs:
+                    r.font.bold = True
+                    r.font.size = Pt(8)
+        row = t.add_row().cells
+        row[0].text = ley["nombre"][:60]
+        row[1].text = arts_str
+        for cell in row:
+            for p in cell.paragraphs:
+                for r in p.runs:
+                    r.font.size = Pt(8)
+        add_paragraph(doc, "")  # Separador
 
     # FIX 5: Analisis vs normativa del guardarriel
     add_heading_styled(doc, "Analisis vs guardarriel", 3)
@@ -1290,9 +1309,9 @@ def build_producto_1(estado: str, leyes: list[dict], output_path: pathlib.Path,
 
     if tabla_norm_path and (tabla_norm_path.exists() or str(tabla_norm_path) == "inline"):
         if normas_inline is not None:
-            add_paragraph(doc, f"Comparacion con: leyes del corpus (N={len(normas_inline)})")
+            add_paragraph(doc, f"Fuente: leyes del corpus (N={len(normas_inline)})")
         else:
-            add_paragraph(doc, f"Comparacion con: {tabla_norm_path.name} ({fuente_guardarriel})")
+            add_paragraph(doc, f"Fuente: {tabla_norm_path.name} ({fuente_guardarriel})")
         try:
             from delimitar_normas_fasp import (
                 parsear_tabla_normatividad,
@@ -1321,25 +1340,43 @@ def build_producto_1(estado: str, leyes: list[dict], output_path: pathlib.Path,
             cnt = Counter(c for _, c in clasif_g)
             extras_cnt = Counter(e["categoria"] for e in clasif_e)
 
-            add_paragraph(doc, f"- Normas del guardarriel: {len(normas_g)}")
-            add_paragraph(doc, f"  - MANTENER (en guardarriel + corpus): {cnt.get('MANTENER', 0)}")
-            add_paragraph(doc, f"  - REVISAR (en corpus pero no en MD): {cnt.get('REVISAR', 0)}")
-            add_paragraph(doc, f"  - FALTANTE (no en corpus): {cnt.get('FALTANTE', 0)}")
-            add_paragraph(doc, f"- Leyes del MD fuera del guardarriel:")
-            add_paragraph(doc, f"  - FASP relevantes: {extras_cnt.get('FASP_FUERA_GUARDARRIEL', 0)}")
-            add_paragraph(doc, f"  - A excluir (programas estatales no FASP): {extras_cnt.get('EXCLUIR', 0)}")
+            # Tabla compacta de cruce
+            tc = doc.add_table(rows=2, cols=3)
+            tc.style = "Table Grid"
+            tc.autofit = False
+            hdr = tc.rows[0].cells
+            hdr[0].text = "Guardarriel"
+            hdr[1].text = "MD (LLM-2)"
+            hdr[2].text = "Leyes"
+            for cell in hdr:
+                for p in cell.paragraphs:
+                    for r in p.runs:
+                        r.font.bold = True
+                        r.font.size = Pt(8)
+            row = tc.rows[1].cells
+            mant = cnt.get('MANTENER', 0)
+            rev = cnt.get('REVISAR', 0)
+            falt = cnt.get('FALTANTE', 0)
+            fasp = extras_cnt.get('FASP_FUERA_GUARDARRIEL', 0)
+            excl = extras_cnt.get('EXCLUIR', 0)
+            row[0].text = f"{len(normas_g)}\nMantener: {mant}\nRevisar: {rev}\nFaltante: {falt}"
+            row[1].text = f"{len(leyes_llm)}\nFASP: {fasp}\nExcluir: {excl}"
+            row[2].text = f"Corpus: {corpus_n}"
+            for cell in row:
+                for p in cell.paragraphs:
+                    for r in p.runs:
+                        r.font.size = Pt(8)
+            add_paragraph(doc, "")
 
             excluidas = [e["nombre"] for e in clasif_e if e["categoria"] == "EXCLUIR"]
             if excluidas:
-                add_paragraph(doc, "")
-                add_paragraph(doc, "Leyes del MD que no contribuyen al FASP (programas estatales):")
-                for e in excluidas[:10]:
-                    add_paragraph(doc, f"  - {e}")
+                add_paragraph(doc, "Leyes del MD que no son FASP (excluir):")
+                for e in excluidas[:5]:
+                    add_paragraph(doc, f"  - {e[:70]}")
         except Exception as e:
-            add_paragraph(doc, f"(No se pudo generar el cruce automatico: {e})")
+            add_paragraph(doc, f"(Error en cruce: {e})")
     else:
         add_paragraph(doc, f"No se encontro TABLA_Normatividad_{estado}.md en {guardarriel_path}")
-        add_paragraph(doc, "El corpus se valida solo por presencia del archivo, sin cruzar contra el guardarriel.")
 
     add_heading_styled(doc, "Normativa federal", 3)
     add_paragraph(doc, "- Criterios Generales del FASP 2026 (DOF, 27 dic 2025)")
